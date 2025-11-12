@@ -29,6 +29,7 @@ module io.knifer.freebox {
     requires java.sql;
     requires net.bjoernpetersen.m3u;
     requires kotlinx.coroutines.core;
+    requires dev.hydraulic.conveyor.control;
 
     requires static lombok;
     requires javafx.graphics;
