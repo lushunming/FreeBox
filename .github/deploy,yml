@@ -2,7 +2,7 @@
 name: Deploy
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "mine" ]
   workflow_dispatch:
 env:
     play_while_download_oauth: ${{ secrets.play_while_download_oauth }}
