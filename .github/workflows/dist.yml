@@ -7,19 +7,21 @@ on:
 env:
     play_while_download_oauth: ${{ secrets.play_while_download_oauth }}
 jobs:
-  build:
-    # Here we expect a build.yml similar to the one in
-    # https://github.com/hydraulic-software/flutter-demo/blob/master/.github/workflows/build.yml
-    uses: ./.github/workflows/build.yml
+
 
   deploy:
-    needs: [build]
+
 
     # Important: must be run from Linux.
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'jetbrains'
 
 
       - name: Make gradlew executable
