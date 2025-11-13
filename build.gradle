@@ -45,7 +45,7 @@ tasks.withType(JavaCompile).configureEach {
 application {
     mainModule = 'io.knifer.freebox'
     mainClass = 'io.knifer.freebox.FreeBoxApplication'
-
+    applicationDefaultJvmArgs = ["--add-exports=javafx.base/com.sun.javafx.event=org.controlsfx.controls"]
 }
 
 javafx {
