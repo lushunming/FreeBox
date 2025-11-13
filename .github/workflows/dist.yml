@@ -27,7 +27,7 @@ jobs:
       - name: Build with Gradle Wrapper
         run: ./gradlew jar
       - name: Run Conveyor
-        uses: hydraulic-software/conveyor/actions/build@v19.0
+        uses: hydraulic-software/conveyor/actions/build@v20.0
         env:
           OAUTH_TOKEN: ${{ secrets.PLAY_WHILE_DOWNLOAD_OAUTH }}
         with:
