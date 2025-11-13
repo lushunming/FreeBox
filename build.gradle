@@ -155,10 +155,7 @@ extraJavaModuleInfo {
 
     // Coroutines 模块配置
     automaticModule('org.jetbrains.kotlinx:kotlinx-coroutines-core', 'kotlinx.coroutines')
-    module('dev.hydraulic.conveyor:conveyor-control', 'dev.hydraulic.conveyor.control') {
-        patchRealModule()
-        exportAllPackages()
-    }
+
 
 }
 
