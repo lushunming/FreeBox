@@ -42,11 +42,10 @@ targetCompatibility = '17'
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
-
 application {
     mainModule = 'io.knifer.freebox'
     mainClass = 'io.knifer.freebox.FreeBoxApplication'
-    applicationDefaultJvmArgs  = ["--add-exports=javafx.base/com.sun.javafx.event=org.controlsfx.controls"]
+    applicationDefaultJvmArgs += ['--add-exports=javafx.base/com.sun.javafx.event=org.controlsfx.controls']
 }
 
 javafx {
