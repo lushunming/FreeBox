@@ -96,55 +96,50 @@ public class HomeController {
 
         vlcHBox.setVisible(vlcNotInstalled);
         vlcHBox.setManaged(vlcNotInstalled);
-        clientListView.getSelectionModel()
-                .selectedItemProperty()
-                .addListener((ob, oldVal, newVal) -> {
-                    // 选择不同的源时，根据源类型的不同，确定各功能按钮的可用性
-                    ClientType clientType;
+        clientListView.getSelectionModel().selectedItemProperty().addListener((ob, oldVal, newVal) -> {
+            // 选择不同的源时，根据源类型的不同，确定各功能按钮的可用性
+            ClientType clientType;
 
-                    if (newVal == null || (clientType = newVal.getClientType()) == null) {
-                        vodButton.setDisable(true);
-                        liveButton.setDisable(true);
-                        sourceAuditButton.setDisable(true);
+            if (newVal == null || (clientType = newVal.getClientType()) == null) {
+                vodButton.setDisable(true);
+                liveButton.setDisable(true);
+                sourceAuditButton.setDisable(true);
 
-                        return;
-                    }
-                    switch (clientType) {
-                        case CATVOD_SPIDER:
-                        case TVBOX_K:
-                            vodButton.setDisable(false);
-                            liveButton.setDisable(false);
-                            sourceAuditButton.setDisable(false);
-                            break;
-                        case SINGLE_LIVE:
-                            vodButton.setDisable(true);
-                            liveButton.setDisable(false);
-                            sourceAuditButton.setDisable(true);
-                            break;
-                    }
-                });
+                return;
+            }
+            switch (clientType) {
+                case CATVOD_SPIDER:
+                case TVBOX_K:
+                    vodButton.setDisable(false);
+                    liveButton.setDisable(false);
+                    sourceAuditButton.setDisable(false);
+                    break;
+                case SINGLE_LIVE:
+                    vodButton.setDisable(true);
+                    liveButton.setDisable(false);
+                    sourceAuditButton.setDisable(true);
+                    break;
+            }
+        });
         Context.INSTANCE.registerEventListener(AppEvents.APP_INITIALIZED, evt -> {
             clientManager = Context.INSTANCE.getClientManager();
             refreshServiceStatusInfo();
-            StorageHelper.findAll(ClientInfo.class)
-                    .values()
-                    .stream()
-                    .filter(c -> {
-                        ClientType clientType = c.getClientType();
+            if (clientItems.isEmpty()) {
+                StorageHelper.save(ClientInfo.of("https://ghproxy.net/https://raw.githubusercontent.com/lushunming/CatVodSpider/refs/heads/dev/json/config.json", ClientType.CATVOD_SPIDER));
+            }
+            StorageHelper.findAll(ClientInfo.class).values().stream().filter(c -> {
+                ClientType clientType = c.getClientType();
 
-                        return clientType == ClientType.CATVOD_SPIDER || clientType == ClientType.SINGLE_LIVE;
-                    })
-                    .forEach(clientInfo -> {
-                        clientManager.register(clientInfo);
-                        clientItems.add(clientInfo);
-                    });
+                return clientType == ClientType.CATVOD_SPIDER || clientType == ClientType.SINGLE_LIVE;
+            }).forEach(clientInfo -> {
+                clientManager.register(clientInfo);
+                clientItems.add(clientInfo);
+            });
+
             if (!clientItems.isEmpty()) {
                 clientListView.getSelectionModel().selectFirst();
             }
-            versionInfoLabel.setText(String.format(
-                    I18nHelper.get(I18nKeys.HOME_VERSION_INFO),
-                    ConfigHelper.getAppVersion()
-            ));
+            versionInfoLabel.setText(String.format(I18nHelper.get(I18nKeys.HOME_VERSION_INFO), ConfigHelper.getAppVersion()));
             // 展示许可协议
             openLicenseDialogIfNeeded();
             // 自动检查更新
@@ -153,12 +148,8 @@ public class HomeController {
             settingsBtn.setDisable(false);
             root.setDisable(false);
         });
-        Context.INSTANCE.registerEventListener(
-                AppEvents.WsServerStartedEvent.class, evt -> refreshServiceStatusInfo()
-        );
-        Context.INSTANCE.registerEventListener(
-                AppEvents.HttpServerStartedEvent.class, evt -> refreshServiceStatusInfo()
-        );
+        Context.INSTANCE.registerEventListener(AppEvents.WsServerStartedEvent.class, evt -> refreshServiceStatusInfo());
+        Context.INSTANCE.registerEventListener(AppEvents.HttpServerStartedEvent.class, evt -> refreshServiceStatusInfo());
         Context.INSTANCE.registerEventListener(AppEvents.ClientRegisteredEvent.class, evt -> {
             MultipleSelectionModel<ClientInfo> model = clientListView.getSelectionModel();
             ClientInfo clientInfo = evt.clientInfo();
@@ -167,10 +158,7 @@ public class HomeController {
             clientItems.removeIf(c -> c.getId().equals(clientInfo.getId()));
             clientItems.add(clientInfo);
             oldClientInfo = clientManager.getCurrentClientImmediately();
-            if (
-                    oldClientInfo != null &&
-                    oldClientInfo.getId().equals(clientInfo.getId())
-            ) {
+            if (oldClientInfo != null && oldClientInfo.getId().equals(clientInfo.getId())) {
                 clientManager.updateCurrentClient(clientInfo);
             }
             if (model.getSelectedItem() == null) {
@@ -261,25 +249,11 @@ public class HomeController {
             service.setOnSucceeded(evt -> {
                 Collection<Pair<NetworkInterface, String>> value = service.getValue();
 
-                settingsInfoText.setText(String.format(
-                        I18nHelper.get(I18nKeys.HOME_SETTINGS_INFO),
-                        CollectionUtil.isEmpty(value) ? ip : value.iterator().next().getValue(),
-                        httpServiceRunningStatus,
-                        httpPort,
-                        wsServiceRunningStatus,
-                        wsPort
-                ));
+                settingsInfoText.setText(String.format(I18nHelper.get(I18nKeys.HOME_SETTINGS_INFO), CollectionUtil.isEmpty(value) ? ip : value.iterator().next().getValue(), httpServiceRunningStatus, httpPort, wsServiceRunningStatus, wsPort));
             });
             service.start();
         } else {
-            settingsInfoText.setText(String.format(
-                    I18nHelper.get(I18nKeys.HOME_SETTINGS_INFO),
-                    ObjectUtils.defaultIfNull(ip, "--"),
-                    httpServiceRunningStatus,
-                    httpPort,
-                    wsServiceRunningStatus,
-                    wsPort
-            ));
+            settingsInfoText.setText(String.format(I18nHelper.get(I18nKeys.HOME_SETTINGS_INFO), ObjectUtils.defaultIfNull(ip, "--"), httpServiceRunningStatus, httpPort, wsServiceRunningStatus, wsPort));
         }
 
     }
@@ -304,11 +278,8 @@ public class HomeController {
         ClientInfo clientInfo;
 
         if (!VLC_PLAYER_CHECK_HANDLER.handle()) {
-            ToastHelper.showErrorAlert(
-                    I18nKeys.HOME_MESSAGE_VLC_NOT_FOUND_TITLE,
-                    I18nKeys.HOME_MESSAGE_VLC_NOT_FOUND,
-                    evt -> {}
-            );
+            ToastHelper.showErrorAlert(I18nKeys.HOME_MESSAGE_VLC_NOT_FOUND_TITLE, I18nKeys.HOME_MESSAGE_VLC_NOT_FOUND, evt -> {
+            });
 
             return;
         }
@@ -348,22 +319,13 @@ public class HomeController {
             StorageHelper.delete(clientId, MovieHistory.class);
             StorageHelper.delete(clientId, MovieCollection.class);
             StorageHelper.delete(clientInfo);
-            ToastHelper.showInfoI18n(
-                    I18nKeys.HOME_MESSAGE_REMOVE_SPIDER_CONFIG_SUCCEED,
-                    clientInfo.getName()
-            );
+            ToastHelper.showInfoI18n(I18nKeys.HOME_MESSAGE_REMOVE_SPIDER_CONFIG_SUCCEED, clientInfo.getName());
 
         } else if (clientInfo.getClientType() == ClientType.SINGLE_LIVE) {
             StorageHelper.delete(clientInfo);
-            ToastHelper.showInfoI18n(
-                    I18nKeys.HOME_MESSAGE_REMOVE_SPIDER_CONFIG_SUCCEED,
-                    clientInfo.getName()
-            );
+            ToastHelper.showInfoI18n(I18nKeys.HOME_MESSAGE_REMOVE_SPIDER_CONFIG_SUCCEED, clientInfo.getName());
         } else {
-            ToastHelper.showInfoI18n(
-                    I18nKeys.MESSAGE_CLIENT_UNREGISTERED,
-                    clientInfo.getName()
-            );
+            ToastHelper.showInfoI18n(I18nKeys.MESSAGE_CLIENT_UNREGISTERED, clientInfo.getName());
         }
     }
 
@@ -397,11 +359,7 @@ public class HomeController {
 
     @FXML
     private void onImportApiBtnAction() {
-        CommandLinksDialog importApiSelectTypeDialog = new CommandLinksDialog(
-                ButtonTypes.CAT_VOD_COMMAND_LINKS_BUTTON_TYPE,
-                ButtonTypes.SINGLE_LIVE_COMMAND_LINKS_BUTTON_TYPE,
-                ButtonTypes.CANCEL_COMMAND_LINKS_BUTTON_TYPE
-        );
+        CommandLinksDialog importApiSelectTypeDialog = new CommandLinksDialog(ButtonTypes.CAT_VOD_COMMAND_LINKS_BUTTON_TYPE, ButtonTypes.SINGLE_LIVE_COMMAND_LINKS_BUTTON_TYPE, ButtonTypes.CANCEL_COMMAND_LINKS_BUTTON_TYPE);
         Consumer<ClientInfo> clientInfoConsumer = clientInfo -> {
             StorageHelper.save(clientInfo);
             if (!clientManager.isRegistered(clientInfo)) {
