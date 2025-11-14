@@ -1,5 +1,6 @@
 package io.knifer.freebox.controller;
 
+import io.knifer.freebox.component.node.IPInfoPopOver;
 import io.knifer.freebox.component.node.ImportCatVodApiDialog;
 import io.knifer.freebox.component.node.ImportSingleLiveApiDialog;
 import io.knifer.freebox.component.node.ImportUrlApiDialog;
@@ -37,6 +38,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.commons.lang3.ObjectUtils;
 import org.apache.commons.lang3.tuple.Pair;
+import org.controlsfx.control.PopOver;
 import org.controlsfx.dialog.CommandLinksDialog;
 
 import java.net.NetworkInterface;
@@ -55,6 +57,8 @@ public class HomeController {
     @FXML
     private Text settingsInfoText;
     @FXML
+    private HBox showIpPromptHBox;
+    @FXML
     private HBox vlcHBox;
     @FXML
     private Label versionInfoLabel;
@@ -66,6 +70,8 @@ public class HomeController {
     private Button liveButton;
     @FXML
     private Button sourceAuditButton;
+
+    private PopOver ipInfoPopOver;
 
     private ClientManager clientManager;
 
@@ -96,39 +102,44 @@ public class HomeController {
 
         vlcHBox.setVisible(vlcNotInstalled);
         vlcHBox.setManaged(vlcNotInstalled);
-        clientListView.getSelectionModel().selectedItemProperty().addListener((ob, oldVal, newVal) -> {
-            // 选择不同的源时，根据源类型的不同，确定各功能按钮的可用性
-            ClientType clientType;
+        clientListView.getSelectionModel()
+                .selectedItemProperty()
+                .addListener((ob, oldVal, newVal) -> {
+                    // 选择不同的源时，根据源类型的不同，确定各功能按钮的可用性
+                    ClientType clientType;
 
-            if (newVal == null || (clientType = newVal.getClientType()) == null) {
-                vodButton.setDisable(true);
-                liveButton.setDisable(true);
-                sourceAuditButton.setDisable(true);
+                    if (newVal == null || (clientType = newVal.getClientType()) == null) {
+                        vodButton.setDisable(true);
+                        liveButton.setDisable(true);
+                        sourceAuditButton.setDisable(true);
 
-                return;
-            }
-            switch (clientType) {
-                case CATVOD_SPIDER:
-                case TVBOX_K:
-                    vodButton.setDisable(false);
-                    liveButton.setDisable(false);
-                    sourceAuditButton.setDisable(false);
-                    break;
-                case SINGLE_LIVE:
-                    vodButton.setDisable(true);
-                    liveButton.setDisable(false);
-                    sourceAuditButton.setDisable(true);
-                    break;
-            }
-        });
+                        return;
+                    }
+                    switch (clientType) {
+                        case CATVOD_SPIDER:
+                        case TVBOX_K:
+                            vodButton.setDisable(false);
+                            liveButton.setDisable(false);
+                            sourceAuditButton.setDisable(false);
+                            break;
+                        case SINGLE_LIVE:
+                            vodButton.setDisable(true);
+                            liveButton.setDisable(false);
+                            sourceAuditButton.setDisable(true);
+                            break;
+                    }
+                });
+        showIpPromptHBox.visibleProperty().bind(settingsInfoText.textProperty().isNotEmpty());
+        showIpPromptHBox.managedProperty().bind(showIpPromptHBox.visibleProperty());
+        ipInfoPopOver = new IPInfoPopOver();
         Context.INSTANCE.registerEventListener(AppEvents.APP_INITIALIZED, evt -> {
             clientManager = Context.INSTANCE.getClientManager();
             refreshServiceStatusInfo();
-            if (clientItems.isEmpty()) {
-                StorageHelper.save(ClientInfo.of("https://ghproxy.net/https://raw.githubusercontent.com/lushunming/CatVodSpider/refs/heads/dev/json/config.json", ClientType.CATVOD_SPIDER));
-            }
-            StorageHelper.findAll(ClientInfo.class).values().stream().filter(c -> {
-                ClientType clientType = c.getClientType();
+            StorageHelper.findAll(ClientInfo.class)
+                    .values()
+                    .stream()
+                    .filter(c -> {
+                        ClientType clientType = c.getClientType();
 
                 return clientType == ClientType.CATVOD_SPIDER || clientType == ClientType.SINGLE_LIVE;
             }).forEach(clientInfo -> {
@@ -398,6 +409,15 @@ public class HomeController {
         if (clientInfo == null) {
             return;
         }
+        if (!VLC_PLAYER_CHECK_HANDLER.handle()) {
+            ToastHelper.showErrorAlert(
+                    I18nKeys.HOME_MESSAGE_VLC_NOT_FOUND_TITLE,
+                    I18nKeys.HOME_MESSAGE_VLC_NOT_FOUND,
+                    evt -> {}
+            );
+
+            return;
+        }
         clientManager.shutdownConnectingExecutor();
         clientManager.updateCurrentClient(clientInfo);
         stageAndController = FXMLUtil.load(Views.LIVE);
@@ -406,5 +426,14 @@ public class HomeController {
         liveStage.setTitle(I18nHelper.getFormatted(I18nKeys.LIVE_WINDOW_TITLE, clientInfo.getName()));
         stageAndController.getRight().setData(clientInfo);
         WindowHelper.route(homeStage, liveStage);
+    }
+
+    @FXML
+    private void onShowAllIpHyperlinkAction(ActionEvent event) {
+        Hyperlink hyperlink = (Hyperlink) event.getSource();
+
+        hyperlink.setVisited(false);
+        ipInfoPopOver.show(hyperlink);
+
     }
 }

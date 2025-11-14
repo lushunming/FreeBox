@@ -33,7 +33,7 @@ module io.knifer.freebox {
 
     requires static lombok;
     requires javafx.graphics;
-
+    requires org.jsoup;
     exports io.knifer.freebox;
     exports io.knifer.freebox.constant;
     exports io.knifer.freebox.controller;
