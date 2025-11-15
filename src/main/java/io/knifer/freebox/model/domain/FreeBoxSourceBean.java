@@ -1,6 +1,5 @@
 package io.knifer.freebox.model.domain;
 
-import cn.hutool.json.JSON;
 import cn.hutool.json.JSONUtil;
 import io.knifer.freebox.model.common.tvbox.SourceBean;
 import lombok.Data;
