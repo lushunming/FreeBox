@@ -1,7 +1,7 @@
 package io.knifer.freebox.util;
 
 import cn.hutool.core.net.URLEncodeUtil;
-import io.knifer.freebox.exception.FBException;
+import lombok.Getter;
 import lombok.experimental.UtilityClass;
 
 import java.io.IOException;
@@ -10,7 +10,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 
@@ -22,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 @UtilityClass
 public class HttpUtil {
 
+    @Getter
     private final static HttpClient client = HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.ALWAYS)
             .connectTimeout(Duration.ofSeconds(10))
@@ -36,14 +36,9 @@ public class HttpUtil {
                             .build(),
                     HttpResponse.BodyHandlers.ofByteArray()
             ).body();
-        } catch (IOException e) {
-            if (e instanceof HttpTimeoutException) {
-                throw e;
-            }
-            throw new FBException("Error while sending request to " + url, e);
-        } catch (InterruptedException e) {
-            return null;
-        }
+        } catch (InterruptedException ignored) {}
+
+        return new byte[0];
     }
 
     public CompletableFuture<String> getAsync(String url) {
@@ -67,7 +62,7 @@ public class HttpUtil {
         ).thenApply(HttpResponse::body);
     }
 
-    private URI parseUrl(String url) {
+    public URI parseUrl(String url) {
         String[] protocolAndPath = url.split("://", 2);
         String protocol = protocolAndPath[0];
         String[] hostAndPath = protocolAndPath[1].split("/", 2);

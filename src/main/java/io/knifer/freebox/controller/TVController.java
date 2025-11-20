@@ -13,10 +13,7 @@ import io.knifer.freebox.context.Context;
 import io.knifer.freebox.exception.FBException;
 import io.knifer.freebox.handler.MovieSuggestionHandler;
 import io.knifer.freebox.handler.impl.SoupianMovieSuggestionHandler;
-import io.knifer.freebox.helper.I18nHelper;
-import io.knifer.freebox.helper.LoadingHelper;
-import io.knifer.freebox.helper.ToastHelper;
-import io.knifer.freebox.helper.WindowHelper;
+import io.knifer.freebox.helper.*;
 import io.knifer.freebox.model.bo.VideoDetailsBO;
 import io.knifer.freebox.model.bo.VideoPlayInfoBO;
 import io.knifer.freebox.model.common.tvbox.*;
@@ -226,7 +223,19 @@ public class TVController {
                 if (!success) {
                     return;
                 }
-                Platform.runLater(() -> template.getSourceBeanList(this::initSourceBeanData));
+                Platform.runLater(() -> template.getSourceBeanList(sourceBeans -> {
+                    if (sourceBeans == null) {
+                        ToastHelper.showErrorI18n(I18nKeys.TV_ERROR_LOAD_SOURCE_BEAN_LIST_FAILED);
+
+                        return;
+                    }
+                    if (sourceBeans.isEmpty()) {
+                        ToastHelper.showErrorI18n(I18nKeys.TV_ERROR_SOURCE_BEAN_LIST_EMPTY);
+
+                        return;
+                    }
+                    initSourceBeanData(sourceBeans);
+                }));
             });
         });
     }
@@ -685,6 +694,7 @@ public class TVController {
         }
         movieHistoryPopOver.destroy();
         movieCollectionPopOver.destroy();
+        ImageHelper.clearCache();
         clientManager.clearCurrentClient();
     }
 
