@@ -31,6 +31,7 @@ jobs:
         uses: hydraulic-software/conveyor/actions/build@v20.0
         env:
           OAUTH_TOKEN: ${{ secrets.PLAY_WHILE_DOWNLOAD_OAUTH }}
+          PWD: ${{ secrets.SOURCEFORGE_PWD }}
         with:
           command:  -vvv make copied-site
           signing_key: ${{ secrets.SIGN_KEY }}
