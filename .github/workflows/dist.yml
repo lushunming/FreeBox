@@ -33,7 +33,7 @@ jobs:
           OAUTH_TOKEN: ${{ secrets.PLAY_WHILE_DOWNLOAD_OAUTH }}
           PWD: ${{ secrets.SOURCEFORGE_PWD }}
         with:
-          command:   make copied-site
+          command:   -vvv make copied-site
           signing_key: ${{ secrets.SIGN_KEY }}
           agree_to_license: 1
           extra_flags: --show-log=error
