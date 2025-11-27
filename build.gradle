@@ -49,7 +49,13 @@ application {
 }
 
 javafx {
-    version = '21.0.9'
+    // 对于arm64架构的linux，JavaFX社区尚未提供21.0.1版本之后的发布
+    version = org.gradle.internal.os.OperatingSystem.current().linux &&
+            getCurrentArch() == 'arm64' ?
+            '21.0.1'
+            :
+            '21.0.9'
+
     modules = ['javafx.controls', 'javafx.fxml','javafx.base', 'javafx.graphics' ]
 }
 
@@ -198,6 +204,7 @@ gluonfx {
     graalvmHome = 'E:\\StudyTools\\graalvm-ce-java17-22.3.2'
 }
 
+def appDisplayName = 'FreeBox'
 jlink {
     imageZip = project.file("${buildDir}/distributions/app-${javafx.platform.classifier}.zip")
     options = ['--strip-debug', '--compress', '2', '--no-header-files', '--no-man-pages']
@@ -221,7 +228,6 @@ jlink {
     }
     jpackage {
         mainClassName = application.mainClass
-        applicationName = launcherName
         installerName = launcherName
         installerType = project.hasProperty('jpackage.installerType') ?
                 project.getProperties().get('jpackage.installerType') :
