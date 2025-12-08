@@ -32,6 +32,8 @@ module io.knifer.freebox {
     requires mpv;
     requires ipcsocket;
 
+    requires kotlinx.coroutines.core;
+
     requires static lombok;
     requires org.jsoup;
 
