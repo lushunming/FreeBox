@@ -2,9 +2,11 @@ package io.knifer.freebox.controller;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.Maps;
+import com.google.common.net.HttpHeaders;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import io.knifer.freebox.component.node.VLCPlayer;
+import io.knifer.freebox.component.node.player.BasePlayer;
+import io.knifer.freebox.constant.BaseValues;
 import io.knifer.freebox.constant.CacheKeys;
 import io.knifer.freebox.constant.I18nKeys;
 import io.knifer.freebox.context.Context;
@@ -22,7 +24,6 @@ import io.knifer.freebox.model.s2c.DeleteMovieCollectionDTO;
 import io.knifer.freebox.model.s2c.GetMovieCollectedStatusDTO;
 import io.knifer.freebox.model.s2c.GetPlayerContentDTO;
 import io.knifer.freebox.model.s2c.SaveMovieCollectionDTO;
-import io.knifer.freebox.service.VLCPlayerDestroyService;
 import io.knifer.freebox.spider.template.SpiderTemplate;
 import io.knifer.freebox.util.AsyncUtil;
 import io.knifer.freebox.util.CollectionUtil;
@@ -89,7 +90,7 @@ public class VideoController extends BaseController implements Destroyable {
     private Movie videoDetail;
     private VideoPlayInfoBO playInfo;
     private SourceBean source;
-    private VLCPlayer player;
+    private BasePlayer<?> player;
     private SpiderTemplate template;
     private Consumer<VideoPlayInfoBO> onClose;
 
@@ -470,6 +471,7 @@ public class VideoController extends BaseController implements Destroyable {
 
             requestBuilder = HttpRequest.newBuilder()
                     .GET()
+                    .headers(HttpHeaders.USER_AGENT, BaseValues.USER_AGENT)
                     .uri(HttpUtil.parseUrl(playUrl));
             if (!headers.isEmpty()) {
                 headers.forEach(requestBuilder::header);
@@ -528,13 +530,9 @@ public class VideoController extends BaseController implements Destroyable {
 
     @Override
     public void destroy() {
-        VLCPlayerDestroyService destroyVLCPlayerService = new VLCPlayerDestroyService(player);
-
-        LoadingHelper.showLoading(WindowHelper.getStage(root), I18nKeys.MESSAGE_QUIT_LOADING);
         updatePlayInfo();
         onClose.accept(playInfo);
-        destroyVLCPlayerService.setOnSucceeded(evt -> LoadingHelper.hideLoading());
-        destroyVLCPlayerService.start();
+        player.destroy();
         Context.INSTANCE.popAndShowLastStage();
     }
 

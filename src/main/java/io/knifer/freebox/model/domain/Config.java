@@ -1,5 +1,7 @@
 package io.knifer.freebox.model.domain;
 
+import io.knifer.freebox.constant.PlayerType;
+import io.knifer.freebox.constant.VideoPlaybackTrigger;
 import lombok.Data;
 
 /**
@@ -66,6 +68,11 @@ public class Config {
     private String usageFontFamily;
 
     /**
+     * 影视播放触发方式
+     */
+    private VideoPlaybackTrigger videoPlaybackTrigger;
+
+    /**
      * 启用广告过滤
      */
     private Boolean adFilter;
@@ -76,4 +83,14 @@ public class Config {
      * -1时禁用强制过滤
      */
     private Double adFilterDynamicThresholdFactor;
+
+    /**
+     * 播放器类型
+     */
+    private PlayerType playerType;
+
+    /**
+     * mpv播放器路径
+     */
+    private String mpvPath;
 }

@@ -3,10 +3,7 @@ package io.knifer.freebox.controller;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.io.FileUtil;
 import io.knifer.freebox.component.validator.PortValidator;
-import io.knifer.freebox.constant.AppEvents;
-import io.knifer.freebox.constant.BaseValues;
-import io.knifer.freebox.constant.I18nKeys;
-import io.knifer.freebox.constant.Views;
+import io.knifer.freebox.constant.*;
 import io.knifer.freebox.context.Context;
 import io.knifer.freebox.controller.dialog.LicenseDialogController;
 import io.knifer.freebox.controller.dialog.UpgradeDialogController;
@@ -14,10 +11,7 @@ import io.knifer.freebox.helper.*;
 import io.knifer.freebox.model.bo.UpgradeCheckResultBO;
 import io.knifer.freebox.net.http.server.FreeBoxHttpServerHolder;
 import io.knifer.freebox.net.websocket.server.KebSocketServerHolder;
-import io.knifer.freebox.service.CheckPortUsingService;
-import io.knifer.freebox.service.LoadConfigService;
-import io.knifer.freebox.service.LoadNetworkInterfaceDataService;
-import io.knifer.freebox.service.UpgradeCheckService;
+import io.knifer.freebox.service.*;
 import io.knifer.freebox.util.CastUtil;
 import io.knifer.freebox.util.FXMLUtil;
 import io.knifer.freebox.util.FormattingUtil;
@@ -35,6 +29,7 @@ import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.stage.Window;
 import lombok.extern.slf4j.Slf4j;
@@ -45,12 +40,14 @@ import org.controlsfx.control.SearchableComboBox;
 import org.controlsfx.validation.ValidationSupport;
 import org.kordamp.ikonli.javafx.FontIcon;
 
+import javax.annotation.Nullable;
+import java.io.File;
 import java.net.NetworkInterface;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-
-
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 
 /**
@@ -115,6 +112,13 @@ public class SettingsController {
     private CheckBox adFilterCheckBox;
     @FXML
     private ToggleGroup adFilterDynamicThresholdFactorToggleGroup;
+    @FXML
+    private ComboBox<PlayerType> playerTypeComboBox;
+    @FXML
+    private ToggleGroup videoPlaybackTriggerToggleGroup;
+
+    private Stage stage;
+    private FileChooser playerExternalFileChooser;
 
     private String oldUsageFontFamily;
 
@@ -122,6 +126,7 @@ public class SettingsController {
     private final BooleanProperty ipChoiceBoxDisableProp = new SimpleBooleanProperty();
 
     private final LoadConfigService loadConfigService = new LoadConfigService();
+    private final CommandExecService externalPlayerCmdExecService = new CommandExecService();
     private final ValidationSupport validationSupport = new ValidationSupport();
 
     private final FreeBoxHttpServerHolder httpServer = Context.INSTANCE.getHttpServer();
@@ -130,22 +135,11 @@ public class SettingsController {
     @FXML
     private void initialize() {
         LoadNetworkInterfaceDataService loadNetworkInterfaceService = new LoadNetworkInterfaceDataService();
-        List<String> fontFamilies = Font.getFamilies();
 
         setupComponent();
-        usageFontFamilyComboBox.getItems().addAll(fontFamilies);
         loadConfigService.setOnSucceeded(evt -> {
-            String usageFontFamily = ConfigHelper.getUsageFontFamily();
-            SingleSelectionModel<String> selectionModel = usageFontFamilyComboBox.getSelectionModel();
-
+            setupComponentData();
             loadNetworkInterfaceService.restart();
-            // 字体
-            oldUsageFontFamily = usageFontFamily;
-            if (CollUtil.contains(fontFamilies, usageFontFamily)) {
-                selectionModel.select(usageFontFamily);
-            } else {
-                selectionModel.selectFirst();
-            }
         });
         loadNetworkInterfaceService.setOnSucceeded(evt -> {
             // 网卡信息获取完成，填充数据
@@ -155,6 +149,7 @@ public class SettingsController {
             saveBtn.setDisable(false);
         });
         loadConfigService.start();
+        Platform.runLater(() -> stage = WindowHelper.getStage(root));
     }
 
     private void putDataInIpChoiceBox(
@@ -193,11 +188,6 @@ public class SettingsController {
     }
 
     private void setupComponent() {
-        String applicationDataSize;
-        Integer configPort = ConfigHelper.getHttpPort();
-        List<Toggle> adFilterDTFToggles;
-        Double adFilterDTFFactor;
-
         // 注册表单验证器
         validationSupport.registerValidator(httpPortTextField, PortValidator.getInstance());
         validationSupport.registerValidator(wsPortTextField, PortValidator.getInstance());
@@ -209,6 +199,14 @@ public class SettingsController {
         wsIpChoiceBox.valueProperty().bindBidirectional(ipValueProp);
         httpIpChoiceBox.disableProperty().bind(ipChoiceBoxDisableProp);
         wsIpChoiceBox.disableProperty().bind(ipChoiceBoxDisableProp);
+    }
+
+    private void setupComponentData() {
+        String applicationDataSize;
+        Integer configPort = ConfigHelper.getHttpPort();
+        List<String> fontFamilies = Font.getFamilies();
+        String usageFontFamily = ConfigHelper.getUsageFontFamily();
+        SingleSelectionModel<String> selectionModel = usageFontFamilyComboBox.getSelectionModel();
 
         if (configPort != null) {
             httpPortTextField.setText(configPort.toString());
@@ -252,7 +250,6 @@ public class SettingsController {
             );
             wsServiceStopBtn.setDisable(true);
         }
-
         // 常规设置tab
         applicationDataSize = FormattingUtil.sizeFormat(FileUtil.size(StorageHelper.getLocalStoragePath().toFile()));
         applicationDataLabel.setText(I18nHelper.getFormatted(I18nKeys.SETTINGS_APPLICATION_DATA, applicationDataSize));
@@ -260,17 +257,41 @@ public class SettingsController {
                 I18nHelper.getFormatted(I18nKeys.SETTINGS_APPLICATION_VERSION, ConfigHelper.getAppVersion())
         );
         autoCheckUpgradeCheckBox.setSelected(BooleanUtils.toBoolean(ConfigHelper.getAutoCheckUpgrade()));
+        usageFontFamilyComboBox.getItems().addAll(fontFamilies);
+        oldUsageFontFamily = usageFontFamily;
+        if (CollUtil.contains(usageFontFamilyComboBox.getItems(), usageFontFamily)) {
+            selectionModel.select(usageFontFamily);
+        } else {
+            selectionModel.selectFirst();
+        }
         adFilterCheckBox.setSelected(BooleanUtils.toBoolean(ConfigHelper.getAdFilter()));
-        adFilterDTFToggles = adFilterDynamicThresholdFactorToggleGroup.getToggles();
-        adFilterDTFFactor = ConfigHelper.getAdFilterDynamicThresholdFactor();
-        for (Toggle toggle : adFilterDTFToggles) {
-            RadioButton radioButton;
+        setupToggleGroup(
+                adFilterDynamicThresholdFactorToggleGroup,
+                ConfigHelper.getAdFilterDynamicThresholdFactor(),
+                toggle -> {
+                    RadioButton radioButton = (RadioButton) toggle;
 
-            if (Objects.equals(toggle.getProperties().get("value"), adFilterDTFFactor)) {
-                adFilterDynamicThresholdFactorToggleGroup.selectToggle(toggle);
+                    radioButton.disableProperty().bind(adFilterCheckBox.selectedProperty().not());
+                }
+        );
+        setupToggleGroup(videoPlaybackTriggerToggleGroup, ConfigHelper.getVideoPlaybackTrigger(), null);
+        playerTypeComboBox.getSelectionModel().select(ConfigHelper.getPlayerType());
+    }
+
+    private void setupToggleGroup(
+            ToggleGroup toggleGroup,
+            Object selectedValue,
+            @Nullable Consumer<Toggle> toggleInitConsumer
+    ) {
+        List<Toggle> toggles = toggleGroup.getToggles();
+
+        for (Toggle toggle : toggles) {
+            if (Objects.equals(toggle.getProperties().get("value"), selectedValue)) {
+                toggleGroup.selectToggle(toggle);
             }
-            radioButton = (RadioButton) toggle;
-            radioButton.disableProperty().bind(adFilterCheckBox.selectedProperty().not());
+            if (toggleInitConsumer != null) {
+                toggleInitConsumer.accept(toggle);
+            }
         }
     }
 
@@ -324,16 +345,22 @@ public class SettingsController {
         String usageFontFamily;
         List<Window> windows;
 
-        if (ValidationHelper.validate(validationSupport)) {
-            WindowHelper.close(root);
-            ConfigHelper.checkAndSave();
-            usageFontFamily = usageFontFamilyComboBox.getValue();
-            if (!StringUtils.equals(oldUsageFontFamily, usageFontFamily)) {
-                windows = Window.getWindows();
-                windows.forEach(window -> WindowHelper.setFontFamily(window, usageFontFamily));
-                Context.INSTANCE.postEvent(new AppEvents.UsageFontChangedEvent(usageFontFamily));
-            }
+        if (!ValidationHelper.validate(validationSupport)) {
+
+            return;
         }
+        WindowHelper.close(root);
+        if (!ConfigHelper.checkAndSave()) {
+
+            return;
+        }
+        usageFontFamily = usageFontFamilyComboBox.getValue();
+        if (!StringUtils.equals(oldUsageFontFamily, usageFontFamily)) {
+            windows = Window.getWindows();
+            windows.forEach(window -> WindowHelper.setFontFamily(window, usageFontFamily));
+            Context.INSTANCE.postEvent(new AppEvents.UsageFontChangedEvent(usageFontFamily));
+        }
+        Context.INSTANCE.postEvent(AppEvents.SETTINGS_SAVED);
     }
 
     @FXML
@@ -377,7 +404,6 @@ public class SettingsController {
     public void onHttpServiceStartBtnAction() {
         Integer httpPort = ConfigHelper.getHttpPort();
         String ip = ConfigHelper.getServiceIPv4();
-        CheckPortUsingService checkPortUsingService = new CheckPortUsingService(httpPort);
 
         disableHttpServiceBtn();
         disableHttpServiceForm();
@@ -386,32 +412,24 @@ public class SettingsController {
                 httpServiceStatusFontIcon,
                 Color.ORANGE
         );
-        checkPortUsingService.setOnSucceeded(evt -> {
-            if (checkPortUsingService.getValue()) {
-                ToastHelper.showError(String.format(
-                        I18nHelper.get(I18nKeys.SETTINGS_PORT_IN_USE),
-                        httpPort
-                ));
-                showServiceStatus(
-                        httpServiceStatusLabel,
-                        httpServiceStatusFontIcon,
-                        Color.GRAY
-                );
-                httpServiceStartBtn.setDisable(false);
-                enableHttpServiceForm();
-            } else {
-                ConfigHelper.checkAndSave();
-                httpServer.start(ip, httpPort);
-                showServiceStatus(
-                        httpServiceStatusLabel,
-                        httpServiceStatusFontIcon,
-                        Color.GREEN
-                );
-                httpServiceStopBtn.setDisable(false);
-                ToastHelper.showSuccessI18n(I18nKeys.SETTINGS_HTTP_SERVICE_UP);
-            }
-        });
-        checkPortUsingService.start();
+        if (httpServer.start(ip, httpPort)) {
+            ConfigHelper.checkAndSave();
+            showServiceStatus(
+                    httpServiceStatusLabel,
+                    httpServiceStatusFontIcon,
+                    Color.GREEN
+            );
+            httpServiceStopBtn.setDisable(false);
+            ToastHelper.showSuccessI18n(I18nKeys.SETTINGS_HTTP_SERVICE_UP);
+        } else {
+            showServiceStatus(
+                    httpServiceStatusLabel,
+                    httpServiceStatusFontIcon,
+                    Color.GRAY
+            );
+            httpServiceStartBtn.setDisable(false);
+            enableHttpServiceForm();
+        }
     }
 
     @FXML
@@ -548,7 +566,7 @@ public class SettingsController {
         WindowHelper.setFontFamily(dialogPane, ConfigHelper.getUsageFontFamily());
         okBtn = CastUtil.cast(dialogPane.lookupButton(ButtonType.OK));
         okBtn.setOnAction(evt -> {
-            LoadingHelper.showLoading(WindowHelper.getStage(root), I18nKeys.MESSAGE_QUIT_LOADING);
+            LoadingHelper.showLoading(stage, I18nKeys.MESSAGE_QUIT_LOADING);
             StorageHelper.clearData();
             Context.INSTANCE.destroy();
         });
@@ -628,6 +646,136 @@ public class SettingsController {
             return;
         }
         ConfigHelper.setAdFilterDynamicThresholdFactor(value);
+        ConfigHelper.markToUpdate();
+    }
+
+    @FXML
+    private void onPlayerComboBoxAction() {
+        PlayerType playerType = playerTypeComboBox.getValue();
+        Function<String, Boolean> resultChecker;
+
+        if (playerType == ConfigHelper.getPlayerType()) {
+            // 可能在赋初值，忽略事件触发
+            return;
+        }
+        if (playerType == PlayerType.VLC) {
+            // 对于vlc播放器，直接应用
+            applyExternalPlayerSetting(playerType, null);
+        } else if (playerType == PlayerType.MPV_EXTERNAL) {
+            // 对于mpv外部播放器，先自动检测，如果检测失败，则手动选择
+            LoadingHelper.showLoading(stage);
+            resultChecker = execResult ->
+                    StringUtils.isNotBlank(execResult) &&
+                            execResult.contains("Copyright") &&
+                            execResult.contains("mpv");
+            checkExternalPlayer(
+                    new String[]{ "mpv", "--version" },
+                    resultChecker,
+                    () -> {
+                        // 自动检测成功
+                        LoadingHelper.hideLoading();
+                        ToastHelper.showSuccessI18n(I18nKeys.SETTINGS_MESSAGE_AUTO_CHECK_EXTERNAL_PLAYER_SUCCESS);
+                        applyExternalPlayerSetting(playerType, "mpv");
+                    },
+                    () -> {
+                        // 自动检测失败，让用户手动选择
+                        String mpvPath;
+
+                        LoadingHelper.hideLoading();
+                        mpvPath = manualChooseExternalPlayer();
+                        if (StringUtils.isBlank(mpvPath)) {
+                            applyExternalPlayerSetting(playerType, null);
+
+                            return;
+                        }
+                        LoadingHelper.showLoading(stage);
+                        // 手动选择后，再次检测以确定播放器是可用的
+                        checkExternalPlayer(
+                                new String[]{ mpvPath, "--version" },
+                                resultChecker,
+                                () -> {
+                                    applyExternalPlayerSetting(playerType, mpvPath);
+                                    LoadingHelper.hideLoading();
+                                },
+                                () -> {
+                                    applyExternalPlayerSetting(playerType, null);
+                                    LoadingHelper.hideLoading();
+                                }
+                        );
+                    }
+            );
+        }
+    }
+
+    /**
+     * 自动检测mpv外部播放器
+     */
+    private void checkExternalPlayer(
+            String[] commands,
+            Function<String, Boolean> resultChecker,
+            Runnable successCallback,
+            Runnable failCallback
+    ) {
+        externalPlayerCmdExecService.setCommands(commands);
+        externalPlayerCmdExecService.setChecker(resultChecker);
+        externalPlayerCmdExecService.setOnSucceeded(evt -> {
+            Pair<Boolean, String> pair = externalPlayerCmdExecService.getValue();
+
+            if (pair.getLeft()) {
+                successCallback.run();
+            } else {
+                failCallback.run();
+            }
+        });
+        externalPlayerCmdExecService.restart();
+    }
+
+    /**
+     * 手动选择外部播放器路径
+     * @return 选择的路径
+     */
+    @Nullable
+    private String manualChooseExternalPlayer() {
+        File externalPlayerFile;
+
+        if (playerExternalFileChooser == null) {
+            playerExternalFileChooser = new FileChooser();
+            playerExternalFileChooser.getExtensionFilters()
+                    .add(new FileChooser.ExtensionFilter("mpv", "mpv", "mpv.exe"));
+            playerExternalFileChooser.setTitle(I18nHelper.get(I18nKeys.SETTINGS_SELECT_PLAYER));
+        }
+        externalPlayerFile = playerExternalFileChooser.showOpenDialog(WindowHelper.getStage(root));
+
+        return externalPlayerFile == null || !externalPlayerFile.exists() ? null : externalPlayerFile.getAbsolutePath();
+    }
+
+    private void applyExternalPlayerSetting(PlayerType playerType, @Nullable String playerPath) {
+        if (playerType == PlayerType.MPV_EXTERNAL) {
+            if (playerPath == null) {
+                playerTypeComboBox.setValue(PlayerType.VLC);
+                playerType = PlayerType.VLC;
+                ToastHelper.showWarningI18n(I18nKeys.SETTINGS_MESSAGE_EXTERNAL_PLAYER_NOT_SELECTED);
+            } else {
+                ConfigHelper.setMpvPath(playerPath);
+                ConfigHelper.markToUpdate();
+            }
+        }
+        if (playerType != ConfigHelper.getPlayerType()) {
+            ConfigHelper.setPlayerType(playerType);
+            ConfigHelper.markToUpdate();
+        }
+    }
+
+    @FXML
+    private void onVideoPlaybackTriggerRadioButtonAction(ActionEvent event) {
+        RadioButton radioButton = (RadioButton) event.getSource();
+        VideoPlaybackTrigger playbackTrigger = (VideoPlaybackTrigger) radioButton.getProperties().get("value");
+
+        if (playbackTrigger == ConfigHelper.getVideoPlaybackTrigger()) {
+
+            return;
+        }
+        ConfigHelper.setVideoPlaybackTrigger(playbackTrigger);
         ConfigHelper.markToUpdate();
     }
 }
