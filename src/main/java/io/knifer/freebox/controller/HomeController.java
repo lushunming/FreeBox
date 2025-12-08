@@ -11,10 +11,7 @@ import io.knifer.freebox.controller.dialog.UpgradeDialogController;
 import io.knifer.freebox.handler.PlayerCheckHandler;
 import io.knifer.freebox.helper.*;
 import io.knifer.freebox.model.bo.UpgradeCheckResultBO;
-import io.knifer.freebox.model.domain.ClientInfo;
-import io.knifer.freebox.model.domain.MovieCollection;
-import io.knifer.freebox.model.domain.MovieHistory;
-import io.knifer.freebox.model.domain.SourceBeanBlockList;
+import io.knifer.freebox.model.domain.*;
 import io.knifer.freebox.net.websocket.core.ClientManager;
 import io.knifer.freebox.service.LoadNetworkInterfaceDataService;
 import io.knifer.freebox.service.UpgradeCheckService;
@@ -158,8 +155,6 @@ public class HomeController {
         Context.INSTANCE.registerEventListener(
                 AppEvents.HttpServerStartedEvent.class, evt -> refreshServiceStatusInfo()
         );
-        Context.INSTANCE.registerEventListener(AppEvents.WsServerStartedEvent.class, evt -> refreshServiceStatusInfo());
-        Context.INSTANCE.registerEventListener(AppEvents.HttpServerStartedEvent.class, evt -> refreshServiceStatusInfo());
         Context.INSTANCE.registerEventListener(AppEvents.ClientRegisteredEvent.class, evt -> {
             MultipleSelectionModel<ClientInfo> model = clientListView.getSelectionModel();
             ClientInfo clientInfo = evt.clientInfo();
@@ -168,7 +163,10 @@ public class HomeController {
             clientItems.removeIf(c -> c.getId().equals(clientInfo.getId()));
             clientItems.add(clientInfo);
             oldClientInfo = clientManager.getCurrentClientImmediately();
-            if (oldClientInfo != null && oldClientInfo.getId().equals(clientInfo.getId())) {
+            if (
+                    oldClientInfo != null &&
+                            oldClientInfo.getId().equals(clientInfo.getId())
+            ) {
                 clientManager.updateCurrentClient(clientInfo);
             }
             if (model.getSelectedItem() == null) {
