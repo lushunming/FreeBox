@@ -13,10 +13,12 @@ public class I18nKeys {
     public static final String INIT_IP_CHANGED_MESSAGE = "init.ip-changed-message";
 
     public static final String HOME_SETTINGS_INFO = "home.settings-info";
-    public static final String HOME_MESSAGE_VLC_NOT_FOUND_TITLE = "home.message.vlc-not-found-title";
-    public static final String HOME_MESSAGE_VLC_NOT_FOUND = "home.message.vlc-not-found";
+    public static final String HOME_PLAYER_NOT_FOUND = "home.player-not-found";
+    public static final String HOME_MESSAGE_PLAYER_NOT_FOUND_TITLE = "home.message.player-not-found-title";
+    public static final String HOME_MESSAGE_PLAYER_NOT_FOUND = "home.message.player-not-found";
     public static final String HOME_MESSAGE_REMOVE_SPIDER_CONFIG_SUCCEED =
             "home.message.remove-spider-config-succeed";
+    public static final String HOME_CLIENT_CONTEXT_MENU_ITEM_COPY_URL = "home.client-context-menu-item-copy-url";
     public static final String HOME_IMPORT_API_SELECT_TYPE_TITLE = "home.import-api.select-type.title";
     public static final String HOME_IMPORT_API_SELECT_TYPE_CONTENT = "home.import-api.select-type.content";
     public static final String HOME_IMPORT_API_SELECT_TYPE_CAT_VOD_TYPE_TITLE =
@@ -96,6 +98,10 @@ public class I18nKeys {
     public static final String VIDEO_SETTINGS_SUBTITLE_MESSAGE_SUCCEED = "video.settings.subtitle.message.succeed";
     public static final String VIDEO_SETTINGS_SUBTITLE_MESSAGE_UPDATE_DELAY_VALUE =
             "video.settings.subtitle.message.update-delay-value";
+    public static final String VIDEO_USING_EXTERNAL_PLAYER = "video.using-external-player";
+    public static final String VIDEO_EXTERNAL_PLAYER_LOADING = "video.external-player-loading";
+    public static final String VIDEO_EXTERNAL_PLAYER_IPC_FAILED = "video.external-player-ipc-failed";
+    public static final String VIDEO_EXTERNAL_PLAYER_UNAVAILABLE = "video.external-player-unavailable";
 
     public static final String LICENSE_AGREE = "license.agree";
 
@@ -120,6 +126,13 @@ public class I18nKeys {
     public static final String SETTINGS_APPLICATION_DATA = "settings.application-data";
     public static final String SETTINGS_DELETE_APPLICATION_DATA_ALERT = "settings.delete-application-data-alert";
     public static final String SETTINGS_APPLICATION_VERSION = "settings.application-version";
+    public static final String SETTINGS_PLAYER_VLC = "settings.player.vlc";
+    public static final String SETTINGS_PLAYER_MPV_EXTERNAL = "settings.player.mpv-external";
+    public static final String SETTINGS_SELECT_PLAYER = "settings.select-player";
+    public static final String SETTINGS_MESSAGE_EXTERNAL_PLAYER_NOT_SELECTED =
+            "settings.message.external-player-not-found";
+    public static final String SETTINGS_MESSAGE_AUTO_CHECK_EXTERNAL_PLAYER_SUCCESS =
+            "settings.message.auto-check-external-player-success";
 
     public static final String ERROR = "error";
     public static final String ERROR_CONTEXT_MESSAGE = "error.context-message";

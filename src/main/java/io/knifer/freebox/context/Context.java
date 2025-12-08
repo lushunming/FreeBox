@@ -75,8 +75,6 @@ public enum Context {
 
     private final Stack<Stage> stageStack = new Stack<>();
 
-    private final boolean debugFlag = "true".equals(BaseResources.X_PROPERTIES.getProperty(BaseValues.X_DEBUG));
-
     public Application getApp() {
         if (!initFlag) {
             throw new IllegalStateException("application has not started yet");
@@ -154,10 +152,6 @@ public enum Context {
         initFlag = true;
     }
 
-    public boolean isDebug() {
-        return debugFlag;
-    }
-
     public boolean isInitialized() {
         return initFlag;
     }
@@ -190,7 +184,7 @@ public enum Context {
                 spiderTemplateMap.values().forEach(SpiderTemplate::destroy);
             }
         }
-        SingleInstanceApplicationHandler.release();
+        SingleInstanceApplicationHandler.getInstance().releaseLock();
         System.exit(0);
     }
 

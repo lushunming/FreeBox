@@ -1,9 +1,7 @@
 package io.knifer.freebox.helper;
 
 import cn.hutool.core.collection.CollUtil;
-import io.knifer.freebox.constant.AppVersions;
-import io.knifer.freebox.constant.BaseResources;
-import io.knifer.freebox.constant.BaseValues;
+import io.knifer.freebox.constant.*;
 import io.knifer.freebox.model.domain.Config;
 import io.knifer.freebox.service.SaveConfigService;
 import io.knifer.freebox.util.json.GsonUtil;
@@ -164,6 +162,39 @@ public class ConfigHelper {
         config.setAdFilterDynamicThresholdFactor(adFilterDynamicThresholdFactor);
     }
 
+    public PlayerType getPlayerType() {
+        assertIfConfigLoaded();
+
+        return config.getPlayerType();
+    }
+
+    public synchronized void setPlayerType(PlayerType playerType) {
+        assertIfConfigLoaded();
+        config.setPlayerType(playerType);
+    }
+
+    public String getMpvPath() {
+        assertIfConfigLoaded();
+
+        return config.getMpvPath();
+    }
+
+    public synchronized void setMpvPath(String mpvPath) {
+        assertIfConfigLoaded();
+        config.setMpvPath(mpvPath);
+    }
+
+    public VideoPlaybackTrigger getVideoPlaybackTrigger() {
+        assertIfConfigLoaded();
+
+        return config.getVideoPlaybackTrigger();
+    }
+
+    public synchronized void setVideoPlaybackTrigger(VideoPlaybackTrigger videoPlaybackTrigger) {
+        assertIfConfigLoaded();
+        config.setVideoPlaybackTrigger(videoPlaybackTrigger);
+    }
+
     private void assertIfConfigLoaded() {
         if (config == null) {
             throw new IllegalStateException("config is not loaded");
@@ -204,6 +235,8 @@ public class ConfigHelper {
                 configLoaded.setUsageFontFamily(Font.getDefault().getFamily());
                 configLoaded.setAdFilter(true);
                 configLoaded.setAdFilterDynamicThresholdFactor(-1D);
+                configLoaded.setPlayerType(PlayerType.VLC);
+                configLoaded.setVideoPlaybackTrigger(VideoPlaybackTrigger.SINGLE_CLICK);
                 Files.createDirectories(CONFIG_PATH.getParent());
                 Files.writeString(CONFIG_PATH, GsonUtil.toJson(configLoaded));
             }
@@ -234,6 +267,14 @@ public class ConfigHelper {
             config.setAdFilterDynamicThresholdFactor(-1D);
             needSave = true;
         }
+        if (config.getPlayerType() == null) {
+            config.setPlayerType(PlayerType.VLC);
+            needSave = true;
+        }
+        if (config.getVideoPlaybackTrigger() == null) {
+            config.setVideoPlaybackTrigger(VideoPlaybackTrigger.SINGLE_CLICK);
+            needSave = true;
+        }
         if (needSave) {
             try {
                 Files.writeString(CONFIG_PATH, GsonUtil.toJson(config));
@@ -258,10 +299,15 @@ public class ConfigHelper {
     /**
      * 检测并保存配置
      */
-    public void checkAndSave() {
-        if (updateFlag.getAndSet(false)) {
+    public boolean checkAndSave() {
+        boolean saved;
+
+        saved = updateFlag.getAndSet(false);
+        if (saved) {
             saveAnyWay();
         }
+
+        return saved;
     }
 
     /**

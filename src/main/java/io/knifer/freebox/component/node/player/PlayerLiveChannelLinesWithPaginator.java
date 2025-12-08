@@ -1,4 +1,4 @@
-package io.knifer.freebox.component.node;
+package io.knifer.freebox.component.node.player;
 
 import io.knifer.freebox.model.domain.LiveChannel;
 import io.knifer.freebox.util.CollectionUtil;
@@ -22,7 +22,7 @@ import java.util.function.Consumer;
  *
  * @author Knifer
  */
-public class VLCPLayerLiveChannelLinesWithPaginator extends HBox {
+public class PlayerLiveChannelLinesWithPaginator extends HBox {
 
     private LiveChannel.Line playingLiveChannelLine;
 
@@ -30,11 +30,11 @@ public class VLCPLayerLiveChannelLinesWithPaginator extends HBox {
     private final SimpleIntegerProperty totalPage = new SimpleIntegerProperty(-1);
     private final HBox linesHBox = new HBox(8);
     private final Consumer<LiveChannel.Line> onLiveChannelLineChanged;
-    private final List<VLCPlayerLiveChannelLineLabel> lineLabels;
+    private final List<PlayerLiveChannelLineLabel> lineLabels;
 
     private final static int PAGE_SIZE = 5;
 
-    public VLCPLayerLiveChannelLinesWithPaginator(Consumer<LiveChannel.Line> onLiveChannelLineChanged) {
+    public PlayerLiveChannelLinesWithPaginator(Consumer<LiveChannel.Line> onLiveChannelLineChanged) {
         super(8);
 
         Label previousLabel = new Label();
@@ -102,33 +102,21 @@ public class VLCPLayerLiveChannelLinesWithPaginator extends HBox {
     }
 
     public void addLine(LiveChannel.Line line) {
-        VLCPlayerLiveChannelLineLabel newLineLabel = new VLCPlayerLiveChannelLineLabel(line);
+        PlayerLiveChannelLineLabel newLineLabel = new PlayerLiveChannelLineLabel(line);
         ObservableList<Node> linesHBoxChildren = linesHBox.getChildren();
-        Node firstLineLabel;
-        List<String> firstLineLabelStyleClasses;
+        PlayerLiveChannelLineLabel firstLineLabel;
 
         newLineLabel.setOnMouseClicked(evt -> {
-            List<String> lineLabelStyleClasses;
-
             if (evt.getButton() != MouseButton.PRIMARY || line == playingLiveChannelLine) {
 
                 return;
             }
-            for (VLCPlayerLiveChannelLineLabel lineLabel : lineLabels) {
-                lineLabelStyleClasses = lineLabel.getStyleClass();
-                if (playingLiveChannelLine == null || lineLabel.getLiveChannelLine() == line) {
-                    // 为正在播放的线路标签添加样式
-                    lineLabelStyleClasses.remove("vlc-player-live-channel-line-label");
-                    if (!lineLabelStyleClasses.contains("vlc-player-live-channel-line-label-focused")) {
-                        lineLabelStyleClasses.add("vlc-player-live-channel-line-label-focused");
-                    }
-                } else {
-                    // 移除其他线路标签的样式
-                    lineLabelStyleClasses.remove("vlc-player-live-channel-line-label-focused");
-                    if (!lineLabelStyleClasses.contains("vlc-player-live-channel-line-label")) {
-                        lineLabelStyleClasses.add("vlc-player-live-channel-line-label");
-                    }
-                }
+            for (PlayerLiveChannelLineLabel lineLabel : lineLabels) {
+                // 为正在播放的线路标签添加样式，移除其他线路标签的样式
+                setLineLabelStyle(
+                        lineLabel,
+                        playingLiveChannelLine == null || lineLabel.getLiveChannelLine() == line
+                );
             }
             playingLiveChannelLine = line;
             onLiveChannelLineChanged.accept(line);
@@ -146,14 +134,58 @@ public class VLCPLayerLiveChannelLinesWithPaginator extends HBox {
             linesHBoxChildren.add(newLineLabel);
         }
         // 默认将第一个线路标签设为正在播放
-        firstLineLabel = CollectionUtil.getFirst(linesHBoxChildren);
+        firstLineLabel = (PlayerLiveChannelLineLabel) CollectionUtil.getFirst(linesHBoxChildren);
         if (firstLineLabel != null && playingLiveChannelLine == null) {
-            firstLineLabelStyleClasses = firstLineLabel.getStyleClass();
-            firstLineLabelStyleClasses.remove("vlc-player-live-channel-line-label");
-            if (!firstLineLabelStyleClasses.contains("vlc-player-live-channel-line-label-focused")) {
-                firstLineLabelStyleClasses.add("vlc-player-live-channel-line-label-focused");
+            setLineLabelStyle(firstLineLabel, true);
+            playingLiveChannelLine = firstLineLabel.getLiveChannelLine();
+        }
+    }
+
+    /**
+     * 设置线路聚焦
+     * @param line 线路
+     */
+    public void focus(LiveChannel.Line line) {
+        LiveChannel.Line lineLabelLine;
+        PlayerLiveChannelLineLabel focusLabel = null;
+        PlayerLiveChannelLineLabel unFocusLabel = null;
+
+        for (PlayerLiveChannelLineLabel lineLabel : lineLabels) {
+            lineLabelLine = lineLabel.getLiveChannelLine();
+            if (lineLabelLine.equals(line)) {
+                focusLabel = lineLabel;
+                if (playingLiveChannelLine == null) {
+                    break;
+                }
+            } else if (lineLabelLine.equals(playingLiveChannelLine)) {
+                unFocusLabel = lineLabel;
             }
-            playingLiveChannelLine = ((VLCPlayerLiveChannelLineLabel) firstLineLabel).getLiveChannelLine();
+        }
+        if (focusLabel == null) {
+
+            return;
+        } else {
+            setLineLabelStyle(focusLabel, true);
+        }
+        if (unFocusLabel != null) {
+            setLineLabelStyle(unFocusLabel, false);
+        }
+        playingLiveChannelLine = line;
+    }
+
+    private void setLineLabelStyle(PlayerLiveChannelLineLabel lineLabel, boolean focused) {
+        List<String> styleClasses = lineLabel.getStyleClass();
+
+        if (focused) {
+            styleClasses.remove("player-live-channel-line-label");
+            if (!styleClasses.contains("player-live-channel-line-label-focused")) {
+                styleClasses.add("player-live-channel-line-label-focused");
+            }
+        } else {
+            styleClasses.remove("player-live-channel-line-label-focused");
+            if (!styleClasses.contains("player-live-channel-line-label")) {
+                styleClasses.add("player-live-channel-line-label");
+            }
         }
     }
 }

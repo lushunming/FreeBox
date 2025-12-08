@@ -1,7 +1,11 @@
 package io.knifer.freebox.controller;
 
 import io.knifer.freebox.component.factory.VideoGridCellFactory;
-import io.knifer.freebox.component.node.*;
+import io.knifer.freebox.component.node.MovieInfoListPopOver;
+import io.knifer.freebox.component.node.MovieRankPopOver;
+import io.knifer.freebox.component.node.MovieSortFilterPopOver;
+import io.knifer.freebox.component.node.SourceBeanBlockPopOver;
+import io.knifer.freebox.component.node.player.BasePlayer;
 import io.knifer.freebox.constant.AppEvents;
 import io.knifer.freebox.constant.BaseValues;
 import io.knifer.freebox.constant.I18nKeys;
@@ -16,9 +20,9 @@ import io.knifer.freebox.model.bo.VideoDetailsBO;
 import io.knifer.freebox.model.bo.VideoPlayInfoBO;
 import io.knifer.freebox.model.common.tvbox.*;
 import io.knifer.freebox.model.domain.ClientInfo;
+import io.knifer.freebox.model.domain.ClientTVProperties;
 import io.knifer.freebox.model.s2c.*;
 import io.knifer.freebox.net.websocket.core.ClientManager;
-import io.knifer.freebox.service.FutureWaitingService;
 import io.knifer.freebox.service.MovieSearchService;
 import io.knifer.freebox.spider.template.SpiderTemplate;
 import io.knifer.freebox.util.CastUtil;
@@ -36,7 +40,7 @@ import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.layout.BorderPane;
-import javafx.scene.layout.HBox;
+import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -86,6 +90,7 @@ public class TVController implements Destroyable {
 
     private MovieSearchService movieSearchService;
 
+    private Stage stage;
     private SourceBeanBlockPopOver sourceBeanBlockPopOver;
     private MovieInfoListPopOver movieHistoryPopOver;
     private MovieInfoListPopOver movieCollectionPopOver;
@@ -101,6 +106,8 @@ public class TVController implements Destroyable {
     private SpiderTemplate template;
     private ClientManager clientManager;
     private Movie.Video fetchMoreItem;
+    private ClientTVProperties clientTVPropertiesBackup;
+    private ClientTVProperties clientTVProperties;
 
     private final MovieSuggestionHandler movieSuggestionHandler = new IQiYiMovieSuggestionHandler();
 
@@ -119,22 +126,8 @@ public class TVController implements Destroyable {
                 evt -> LoadingHelper.hideLoading()
         );
         Platform.runLater(() -> {
-            Stage stage = WindowHelper.getStage(root);
-            FutureWaitingService<ClientInfo> service;
-
             clientManager = Context.INSTANCE.getClientManager();
-            service = new FutureWaitingService<>(
-                    clientManager.getCurrentClient()
-            );
-            service.setOnSucceeded(evt -> {
-                ClientInfo clientInfo = service.getValue();
-
-                if (clientInfo == null) {
-                    return;
-                }
-                stage.setTitle(clientInfo.getName());
-            });
-            service.start();
+            stage = WindowHelper.getStage(root);
             stage.setOnCloseRequest(evt -> {
                destroy();
                Context.INSTANCE.popAndShowLastStage();
@@ -258,19 +251,14 @@ public class TVController implements Destroyable {
                 if (!success) {
                     return;
                 }
-                Platform.runLater(() -> template.getSourceBeanList(sourceBeans -> {
-                    if (sourceBeans == null) {
-                        ToastHelper.showErrorI18n(I18nKeys.TV_ERROR_LOAD_SOURCE_BEAN_LIST_FAILED);
+                clientManager.getCurrentClient()
+                        .thenAccept(clientInfo -> {
+                            if (clientInfo == null) {
 
-                        return;
-                    }
-                    if (sourceBeans.isEmpty()) {
-                        ToastHelper.showErrorI18n(I18nKeys.TV_ERROR_SOURCE_BEAN_LIST_EMPTY);
-
-                        return;
-                    }
-                    initSourceBeanData(sourceBeans);
-                }));
+                                return;
+                            }
+                            initTVByClientInfo(clientInfo);
+                        });
             });
         });
     }
@@ -408,7 +396,7 @@ public class TVController implements Destroyable {
         SourceBean sourceBean = getSourceBean(sourceKey);
 
         Platform.runLater(
-                () -> LoadingHelper.showLoading(WindowHelper.getStage(root), I18nKeys.MESSAGE_LOADING)
+                () -> LoadingHelper.showLoading(WindowHelper.getStage(root))
         );
         template.getDetailContent(
                 GetDetailContentDTO.of(sourceBean.getKey(), videoId),
@@ -446,7 +434,7 @@ public class TVController implements Destroyable {
                                 detailContent,
                                 playInfo,
                                 sourceBean,
-                                new VLCPlayer((HBox) videoStage.getScene().getRoot()),
+                                BasePlayer.createPlayer((Pane) videoStage.getScene().getRoot()),
                                 template,
                                 newPlayInfo -> {
                                     if (newPlayInfo != null) {
@@ -483,16 +471,47 @@ public class TVController implements Destroyable {
         );
     }
 
-    /**
-     * 初始化源列表
-     * @param sourceBeanList 源对象列表
-     */
-    private void initSourceBeanData(List<SourceBean> sourceBeanList) {
-        List<SourceBean> activeSourceBeans = sourceBeanBlockPopOver.setSourceBeans(sourceBeanList);
+    private void initTVByClientInfo(ClientInfo clientInfo) {
+        Platform.runLater(() -> {
+            stage.setTitle(clientInfo.getName());
+            initProperties(clientInfo);
+            initSourceBeanData();
+        });
+    }
 
-        if (!activeSourceBeans.isEmpty()) {
-            updateSourceBeanData(activeSourceBeans);
-        }
+    private void initProperties(ClientInfo clientInfo) {
+        String clientId = clientInfo.getId();
+
+        clientTVProperties = StorageHelper.find(
+                clientId, ClientTVProperties.class
+        ).orElseGet(() -> ClientTVProperties.from(clientId));
+        clientTVPropertiesBackup = clientTVProperties.copy();
+    }
+
+    /**
+     * 初始化源列表数据
+     */
+    private void initSourceBeanData() {
+        template.getSourceBeanList(sourceBeans -> {
+            List<SourceBean> activeSourceBeans;
+
+            if (sourceBeans == null) {
+                ToastHelper.showErrorI18n(
+                        I18nKeys.TV_ERROR_LOAD_SOURCE_BEAN_LIST_FAILED
+                );
+
+                return;
+            }
+            if (sourceBeans.isEmpty()) {
+                ToastHelper.showErrorI18n(I18nKeys.TV_ERROR_SOURCE_BEAN_LIST_EMPTY);
+
+                return;
+            }
+            activeSourceBeans = sourceBeanBlockPopOver.setSourceBeans(sourceBeans);
+            if (!activeSourceBeans.isEmpty()) {
+                updateSourceBeanData(activeSourceBeans);
+            }
+        });
     }
 
     /**
@@ -503,6 +522,7 @@ public class TVController implements Destroyable {
         List<SourceBean> items = sourceBeanComboBox.getItems();
         VideoGridCellFactory videoGridCellFactory;
         SingleSelectionModel<SourceBean> selectionModel;
+        String sourceKeyLastUsed;
 
         items.clear();
         if (sourceBeanList.isEmpty()) {
@@ -519,7 +539,13 @@ public class TVController implements Destroyable {
         movieCollectionPopOver.setSourceBeans(sourceBeanList);
         selectionModel = sourceBeanComboBox.getSelectionModel();
         if (selectionModel.getSelectedItem() == null) {
-            selectionModel.selectFirst();
+            sourceKeyLastUsed = clientTVProperties.getSourceKeyLastUsed();
+            if (StringUtils.isBlank(sourceKeyLastUsed)) {
+                selectionModel.selectFirst();
+            } else {
+                CollectionUtil.findFirst(items, i -> sourceKeyLastUsed.equals(i.getKey()))
+                                .ifPresentOrElse(selectionModel::select, selectionModel::selectFirst);
+            }
         }
     }
 
@@ -718,12 +744,7 @@ public class TVController implements Destroyable {
     public void destroy() {
         ClientInfo clientInfo = clientManager.getCurrentClientImmediately();
 
-        if (clientInfo != null) {
-            log.info(
-                    "[{}]'s tv controller destroy",
-                    clientInfo.getName()
-            );
-        }
+        saveClientTVProperties();
         clearMovieData();
         if (videosGridView.getCellFactory() instanceof VideoGridCellFactory factory) {
             factory.destroy();
@@ -732,6 +753,25 @@ public class TVController implements Destroyable {
         movieCollectionPopOver.destroy();
         ImageHelper.clearCache();
         clientManager.clearCurrentClient();
+        if (clientInfo != null) {
+            log.info(
+                    "[{}]'s tv controller destroy",
+                    clientInfo.getName()
+            );
+        }
+    }
+
+    private void saveClientTVProperties() {
+        SourceBean sourceBean = getSourceBean();
+
+        if (sourceBean == null) {
+
+            return;
+        }
+        clientTVProperties.setSourceKeyLastUsed(sourceBean.getKey());
+        if (!clientTVPropertiesBackup.equals(clientTVProperties)) {
+            StorageHelper.save(clientTVProperties);
+        }
     }
 
     private void clearMovieData() {
