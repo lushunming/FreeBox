@@ -6,6 +6,7 @@ plugins {
     id 'org.beryx.jlink' version '2.25.0'
     id 'com.gluonhq.gluonfx-gradle-plugin' version '1.0.23'
     id 'org.gradlex.extra-java-module-info' version '1.12'
+    id "org.jetbrains.kotlin.jvm" version "2.1.0"
 }
 
 // 读取配置文件
@@ -25,7 +26,14 @@ version buildVersion
 repositories {
     mavenCentral()
 }
-
+kotlin {
+    jvmToolchain(17) // 设置为 JDK 17
+}
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
 sourceCompatibility = '17'
 targetCompatibility = '17'
 
@@ -109,6 +117,11 @@ dependencies {
     testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:${dv.junit}"
     testCompileOnly "org.projectlombok:lombok:${dv.lombok}"
     testAnnotationProcessor "org.projectlombok:lombok:${dv.lombok}"
+
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:2.1.0"
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0") {
+        exclude group: 'org.jetbrains', module: 'annotations'
+    }
 }
 
 extraJavaModuleInfo {
@@ -148,6 +161,14 @@ extraJavaModuleInfo {
     automaticModule('cn.wanghaomiao:JsoupXpath', 'jsoupXpath')
     // mpv
     automaticModule('io.github.kknifer7:mpv', 'mpv')
+
+    // Kotlin 相关模块配置
+    module('org.jetbrains.kotlin:kotlin-stdlib', 'kotlin.stdlib') {
+        patchRealModule()
+        exportAllPackages()
+    }
+    // Coroutines 模块配置
+    automaticModule('org.jetbrains.kotlinx:kotlinx-coroutines-core', 'kotlinx.coroutines')
 }
 
 test {
