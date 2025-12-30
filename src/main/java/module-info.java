@@ -33,6 +33,7 @@ module io.knifer.freebox {
     requires ipcsocket;
     requires kotlinx.coroutines.core;
     requires dev.hydraulic.conveyor.control;
+    requires emojiJava;
 
     requires static lombok;
     requires javafx.graphics;
@@ -47,6 +48,8 @@ module io.knifer.freebox {
     exports io.knifer.freebox.model.common.tvbox;
     exports io.knifer.freebox.model.common.catvod;
     exports io.knifer.freebox.model.c2s;
+    exports io.knifer.freebox.model.s2c;
+    exports io.knifer.freebox.model.bo;
     exports io.knifer.freebox.spider;
     exports io.knifer.freebox.component.factory;
     opens io.knifer.freebox to javafx.fxml;
