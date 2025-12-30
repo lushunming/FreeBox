@@ -29,7 +29,7 @@ public class BaseValues {
     public static final String REPOSITORY_URL = "https://github.com/kknifer7/FreeBox";
     public static final String REPOSITORY_NEW_ISSUE_URL =
             "https://github.com/kknifer7/FreeBox/issues/new?template=%E6%8A%A5%E5%91%8A%E6%A8%A1%E6%9D%BF.md";
-    public static final String TV_BOX_K_REPOSITORY_URL = "https://github.com/kknifer7/TVBoxOS-K";
+    public static final String TV_BOX_K_REPOSITORY_URL = "https://github.com/kknifer7/TV-K";
     /**
      * KebSocket通信超时时间
      */
@@ -44,6 +44,8 @@ public class BaseValues {
      */
     public static final String X_APP_VERSION = "app-version";
     public static final String X_APP_VERSION_CODE = "app-version-code";
+    public static final String X_SUPPORTED_KEB_SOCKET_PROTOCOL_VERSION_CODE =
+            "supported-keb-socket-protocol-version-code";
     public static final String X_UPGRADE_CONFIG_URL = "upgrade-config-url";
     public static final String X_DEBUG = "debug";
 
