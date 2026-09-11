@@ -52,26 +52,17 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
     private FreeBoxApiConfig apiConfig;
     private List<SourceBean> sourceBeans;
 
-    private final static ThreadPoolExecutor EXECUTOR =  new ThreadPoolExecutor(
-            2,
-            Runtime.getRuntime().availableProcessors(),
-            60L,
-            TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(),
-            r -> {
-                Thread t = new Thread(r);
+    private final static ThreadPoolExecutor EXECUTOR = new ThreadPoolExecutor(2, Runtime.getRuntime().availableProcessors(), 60L, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), r -> {
+        Thread t = new Thread(r);
 
-                t.setName("FreeBoxSpiderTemplate-Thread");
-                t.setUncaughtExceptionHandler(GlobalExceptionHandler.getInstance());
+        t.setName("FreeBoxSpiderTemplate-Thread");
+        t.setUncaughtExceptionHandler(GlobalExceptionHandler.getInstance());
 
-                return t;
-            }
-    );
+        return t;
+    });
 
     @Inject
-    public FreeBoxSpiderTemplate(
-            ClientManager clientManager, SpiderJarLoader spiderJarLoader, CatVodBeanConverter catVodBeanConverter
-    ) {
+    public FreeBoxSpiderTemplate(ClientManager clientManager, SpiderJarLoader spiderJarLoader, CatVodBeanConverter catVodBeanConverter) {
         this.clientManager = clientManager;
         this.spiderJarLoader = spiderJarLoader;
         this.beanConverter = catVodBeanConverter;
@@ -88,12 +79,9 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
 
             if (configUrl.startsWith("http")) {
                 try {
-                    jsonVal = HttpUtil.getAsync(configUrl, BaseValues.FETCH_CAT_VOD_API_CONFIG_HTTP_HEADERS)
-                            .get(BaseValues.KEB_SOCKET_REQUEST_TIMEOUT, TimeUnit.SECONDS);
+                    jsonVal = HttpUtil.getAsync(configUrl, BaseValues.FETCH_CAT_VOD_API_CONFIG_HTTP_HEADERS).get(BaseValues.KEB_SOCKET_REQUEST_TIMEOUT, TimeUnit.SECONDS);
                     if (StringUtils.isBlank(jsonVal)) {
-                        Platform.runLater(
-                                () -> ToastHelper.showErrorI18n(I18nKeys.HOME_IMPORT_API_MESSAGE_GET_CONFIG_FAILED)
-                        );
+                        Platform.runLater(() -> ToastHelper.showErrorI18n(I18nKeys.HOME_IMPORT_API_MESSAGE_GET_CONFIG_FAILED));
                     } else {
                         jsonVal = ApiConfigUtil.parseApiConfigJson(jsonVal.trim());
                     }
@@ -106,14 +94,9 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
                 }
             } else if (configUrl.startsWith("file:///")) {
 
-                return doInit(
-                        configUrl,
-                        ApiConfigUtil.parseApiConfigJson(FileUtil.readString(configUrl, Charsets.UTF_8).trim())
-                );
+                return doInit(configUrl, ApiConfigUtil.parseApiConfigJson(FileUtil.readString(configUrl, Charsets.UTF_8).trim()));
             } else {
-                Platform.runLater(
-                        () -> ToastHelper.showErrorI18n(I18nKeys.HOME_IMPORT_API_MESSAGE_INVALID_CONFIG_URL)
-                );
+                Platform.runLater(() -> ToastHelper.showErrorI18n(I18nKeys.HOME_IMPORT_API_MESSAGE_INVALID_CONFIG_URL));
 
                 return doInit(configUrl, null);
             }
@@ -143,21 +126,14 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
         }
         apiConfig.setUrl(configUrl);
         spiderUrl = apiConfig.getSpider();
-        if (
-                !StringUtils.startsWith(spiderUrl, "./") &&
-                        !StringUtils.startsWith(spiderUrl, "../") &&
-                        !ValidationUtil.isURL(spiderUrl)
-        ) {
+        if (!StringUtils.startsWith(spiderUrl, "./") && !StringUtils.startsWith(spiderUrl, "../") && !ValidationUtil.isURL(spiderUrl)) {
             Platform.runLater(() -> ToastHelper.showErrorI18n(I18nKeys.TV_ERROR_LOAD_SPIDER_CONFIG_FAILED));
             log.error("load api config error, spider url invalid");
 
             return false;
         }
         spiderJarLoader.setApiConfig(apiConfig);
-        sourceBeans = apiConfig.getSites()
-                .stream()
-                .map(FreeBoxSourceBean::toSourceBean)
-                .toList();
+        sourceBeans = apiConfig.getSites().stream().map(FreeBoxSourceBean::toSourceBean).toList();
         log.info("load api config success");
 
         return true;
@@ -171,12 +147,11 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
 
     @Override
     public CompletableFuture<List<SourceBean>> getSourceBeanList() {
-        return CompletableFuture.completedFuture(sourceBeans)
-                .exceptionally(e -> {
-                    handleException(e);
+        return CompletableFuture.completedFuture(sourceBeans).exceptionally(e -> {
+            handleException(e);
 
-                    return List.of();
-                });
+            return List.of();
+        });
     }
 
     @Override
@@ -202,12 +177,7 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
             Object spider = getSpider(sourceKey);
             HashMap<String, String> filterSelect = dto.getExtend();
             boolean filter = !filterSelect.isEmpty();
-            Result result = GsonUtil.fromJson(
-                    SpiderInvokeUtil.categoryContent(
-                            spider, dto.getTid(), dto.getPage(), filter, filterSelect
-                    ),
-                    Result.class
-            );
+            Result result = GsonUtil.fromJson(SpiderInvokeUtil.categoryContent(spider, dto.getTid(), dto.getPage(), filter, filterSelect), Result.class);
 
             log.info("getCategoryContent: {}", result);
 
@@ -223,9 +193,7 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
     public CompletableFuture<AbsXml> getDetailContent(GetDetailContentDTO dto) {
         return CompletableFuture.supplyAsync(() -> {
             Object spider = getSpider(dto.getSourceKey());
-            Result result = GsonUtil.fromJson(
-                    SpiderInvokeUtil.detailContent(spider, List.of(dto.getVodId())), Result.class
-            );
+            Result result = GsonUtil.fromJson(SpiderInvokeUtil.detailContent(spider, List.of(dto.getVodId())), Result.class);
 
             log.info("getDetailContent: {}", result);
 
@@ -241,10 +209,7 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
     public CompletableFuture<JsonObject> getPlayerContent(GetPlayerContentDTO dto) {
         return CompletableFuture.supplyAsync(() -> {
             Object spider = getSpider(dto.getSourceKey());
-            JsonObject sourceResult = GsonUtil.fromJson(
-                    SpiderInvokeUtil.playerContent(spider, dto.getPlayFlag(), dto.getVodId(), List.of()),
-                    JsonObject.class
-            );
+            JsonObject sourceResult = GsonUtil.fromJson(SpiderInvokeUtil.playerContent(spider, dto.getPlayFlag(), dto.getVodId(), List.of()), JsonObject.class);
             JsonObject result;
 
             log.info("getPlayerContent: {}", sourceResult);
@@ -265,64 +230,55 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
 
     @Override
     public CompletableFuture<List<VodInfo>> getPlayHistory(GetPlayHistoryDTO dto) {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
-                    MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class)
-                            .orElse(null);
-                    Collection<VodInfo> result;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
+            MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class).orElse(null);
+            Collection<VodInfo> result;
 
-                    if (movieHistory == null) {
-                        log.info("getPlayHistory: null");
+            if (movieHistory == null) {
+                log.info("getPlayHistory: null");
 
-                        return List.<VodInfo>of();
-                    } else {
-                        result = movieHistory.getData().values();
-                        log.info("getPlayHistory: {}", result);
+                return List.<VodInfo>of();
+            } else {
+                result = movieHistory.getData().values();
+                log.info("getPlayHistory: {}", result);
 
-                        return result.isEmpty() ? List.<VodInfo>of() : new ArrayList<>(result);
-                    }
-                }, EXECUTOR))
-                .exceptionally(e -> {
-                    handleException(e);
+                return result.isEmpty() ? List.<VodInfo>of() : cn.hutool.core.collection.CollectionUtil.reverse(new ArrayList<>(result));
+            }
+        }, EXECUTOR)).exceptionally(e -> {
+            handleException(e);
 
-                    return List.of();
-                });
+            return List.of();
+        });
     }
 
     @Override
     public CompletableFuture<VodInfo> getOnePlayHistory(GetOnePlayHistoryDTO dto) {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
-                    MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class)
-                            .orElse(null);
-                    VodInfo result;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
+            MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class).orElse(null);
+            VodInfo result;
 
-                    if (movieHistory == null) {
-                        log.info("getOnePlayHistory: null");
+            if (movieHistory == null) {
+                log.info("getOnePlayHistory: null");
 
-                        return null;
-                    } else {
-                        result = movieHistory.getData().get(DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId()));
-                        log.info("getOnePlayHistory: {}", result);
+                return null;
+            } else {
+                result = movieHistory.getData().get(DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId()));
+                log.info("getOnePlayHistory: {}", result);
 
-                        return result;
-                    }
-                }, EXECUTOR))
-                .exceptionally(e -> {
-                    handleException(e);
+                return result;
+            }
+        }, EXECUTOR)).exceptionally(e -> {
+            handleException(e);
 
-                    return null;
-                });
+            return null;
+        });
     }
 
     @Override
     public CompletableFuture<AbsXml> getSearchContent(GetSearchContentDTO dto) {
         return CompletableFuture.supplyAsync(() -> {
             Object spider = getSpider(dto.getSourceKey());
-            Result result = GsonUtil.fromJson(
-                    SpiderInvokeUtil.searchContent(spider, dto.getKeyword(), false),
-                    Result.class
-            );
+            Result result = GsonUtil.fromJson(SpiderInvokeUtil.searchContent(spider, dto.getKeyword(), false), Result.class);
 
             log.info("getSearchContent: {}", result);
 
@@ -341,158 +297,130 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
 
     @Override
     public CompletableFuture<Void> savePlayHistory(SavePlayHistoryDTO dto) {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
-                    MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class)
-                            .orElse(null);
-                    Map<String, VodInfo> data;
-                    VodInfo vodInfo;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
+            MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class).orElse(null);
+            Map<String, VodInfo> data;
+            VodInfo vodInfo;
 
-                    if (movieHistory == null) {
-                        data = new HashMap<>();
-                        movieHistory = MovieHistory.of(clientInfo.getId(), data);
-                    } else {
-                        data = movieHistory.getData();
-                    }
-                    vodInfo = VodInfo.from(dto);
-                    data.put(
-                            DigestUtil.md5Hex(vodInfo.getSourceKey() + vodInfo.getId()),
-                            vodInfo
-                    );
-                    StorageHelper.save(movieHistory);
-                    log.info("savePlayHistory: {}", movieHistory);
-                }, EXECUTOR));
+            if (movieHistory == null) {
+                data = new HashMap<>();
+                movieHistory = MovieHistory.of(clientInfo.getId(), data);
+            } else {
+                data = movieHistory.getData();
+            }
+            vodInfo = VodInfo.from(dto);
+            data.put(DigestUtil.md5Hex(vodInfo.getSourceKey() + vodInfo.getId()), vodInfo);
+            StorageHelper.save(movieHistory);
+            log.info("savePlayHistory: {}", movieHistory);
+        }, EXECUTOR));
     }
 
     @Override
     public CompletableFuture<Void> deletePlayHistory(DeletePlayHistoryDTO dto) {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
-                    MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class)
-                            .orElse(null);
-                    VodInfo removed;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
+            MovieHistory movieHistory = StorageHelper.find(clientInfo.getId(), MovieHistory.class).orElse(null);
+            VodInfo removed;
 
-                    if (movieHistory == null) {
+            if (movieHistory == null) {
 
-                        return;
-                    }
-                    removed = movieHistory.getData().remove(
-                            DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId())
-                    );
-                    if (removed != null) {
-                        StorageHelper.save(movieHistory);
-                    }
-                    log.info("deletePlayHistory: {}", movieHistory);
-                }, EXECUTOR));
+                return;
+            }
+            removed = movieHistory.getData().remove(DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId()));
+            if (removed != null) {
+                StorageHelper.save(movieHistory);
+            }
+            log.info("deletePlayHistory: {}", movieHistory);
+        }, EXECUTOR));
     }
 
     @Override
     public CompletableFuture<Void> saveMovieCollection(SaveMovieCollectionDTO dto) {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
-                    MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class)
-                            .orElse(null);
-                    Map<String, VodCollect> data;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
+            MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class).orElse(null);
+            Map<String, VodCollect> data;
 
-                    if (movieCollection == null) {
-                        data = new HashMap<>();
-                        movieCollection = MovieCollection.of(clientInfo.getId(), data);
-                    } else {
-                        data = movieCollection.getData();
-                    }
-                    data.put(
-                            DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId()),
-                            VodCollect.from(dto)
-                    );
-                    StorageHelper.save(movieCollection);
-                    log.info("saveMovieCollection: {}", movieCollection);
-                }, EXECUTOR))
-                .exceptionally(e -> {
-                    handleException(e);
+            if (movieCollection == null) {
+                data = new HashMap<>();
+                movieCollection = MovieCollection.of(clientInfo.getId(), data);
+            } else {
+                data = movieCollection.getData();
+            }
+            data.put(DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId()), VodCollect.from(dto));
+            StorageHelper.save(movieCollection);
+            log.info("saveMovieCollection: {}", movieCollection);
+        }, EXECUTOR)).exceptionally(e -> {
+            handleException(e);
 
-                    return null;
-                });
+            return null;
+        });
     }
 
     @Override
     public CompletableFuture<Void> deleteMovieCollection(DeleteMovieCollectionDTO dto) {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
-                    MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class)
-                            .orElse(null);
-                    VodCollect removed;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.runAsync(() -> {
+            MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class).orElse(null);
+            VodCollect removed;
 
-                    if (movieCollection == null) {
+            if (movieCollection == null) {
 
-                        return;
-                    }
-                    removed = movieCollection.getData().remove(
-                            DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId())
-                    );
-                    if (removed != null) {
-                        StorageHelper.save(movieCollection);
-                    }
-                    log.info("deleteMovieCollection: {}", movieCollection);
-                }, EXECUTOR))
-                .exceptionally(e -> {
-                    handleException(e);
+                return;
+            }
+            removed = movieCollection.getData().remove(DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId()));
+            if (removed != null) {
+                StorageHelper.save(movieCollection);
+            }
+            log.info("deleteMovieCollection: {}", movieCollection);
+        }, EXECUTOR)).exceptionally(e -> {
+            handleException(e);
 
-                    return null;
-                });
+            return null;
+        });
     }
 
     @Override
     public CompletableFuture<List<VodCollect>> getMovieCollection() {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
-                    MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class)
-                            .orElse(null);
-                    Collection<VodCollect> result;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
+            MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class).orElse(null);
+            Collection<VodCollect> result;
 
-                    if (movieCollection == null) {
-                        log.info("getMovieCollection: null");
+            if (movieCollection == null) {
+                log.info("getMovieCollection: null");
 
-                        return List.<VodCollect>of();
-                    } else {
-                        result = movieCollection.getData().values();
-                        log.info("getMovieCollection: {}", movieCollection);
+                return List.<VodCollect>of();
+            } else {
+                result = movieCollection.getData().values();
+                log.info("getMovieCollection: {}", movieCollection);
 
-                        return result.isEmpty() ? List.<VodCollect>of() : new ArrayList<>(result);
-                    }
-                }, EXECUTOR))
-                .exceptionally(e -> {
-                    handleException(e);
+                return result.isEmpty() ? List.<VodCollect>of() : new ArrayList<>(result);
+            }
+        }, EXECUTOR)).exceptionally(e -> {
+            handleException(e);
 
-                    return List.of();
-                });
+            return List.of();
+        });
     }
 
     @Override
     public CompletableFuture<Boolean> getMovieCollectedStatus(GetMovieCollectedStatusDTO dto) {
-        return clientManager.getCurrentClient()
-                .thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
-                    MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class)
-                            .orElse(null);
-                    boolean flag;
+        return clientManager.getCurrentClient().thenCompose(clientInfo -> CompletableFuture.supplyAsync(() -> {
+            MovieCollection movieCollection = StorageHelper.find(clientInfo.getId(), MovieCollection.class).orElse(null);
+            boolean flag;
 
-                    if (movieCollection == null) {
-                        log.info("getMovieCollectedStatus: false");
+            if (movieCollection == null) {
+                log.info("getMovieCollectedStatus: false");
 
-                        return false;
-                    } else {
-                        flag = movieCollection.getData().containsKey(
-                                DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId())
-                        );
-                        log.info("getMovieCollectedStatus: {}", flag);
+                return false;
+            } else {
+                flag = movieCollection.getData().containsKey(DigestUtil.md5Hex(dto.getSourceKey() + dto.getVodId()));
+                log.info("getMovieCollectedStatus: {}", flag);
 
-                        return flag;
-                    }
-                }, EXECUTOR))
-                .exceptionally(e -> {
-                    handleException(e);
+                return flag;
+            }
+        }, EXECUTOR)).exceptionally(e -> {
+            handleException(e);
 
-                    return false;
-                });
+            return false;
+        });
     }
 
     private ClientInfo getClientInfo() {
@@ -506,12 +434,7 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
     }
 
     private Object getSpider(String sourceKey) {
-        SourceBean sourceBean = CollectionUtil.findFirst(
-                sourceBeans,
-                bean -> bean.getKey().equals(sourceKey)
-        ).orElseThrow(
-                () -> new FBException("No source bean found for key: " + sourceKey)
-        );
+        SourceBean sourceBean = CollectionUtil.findFirst(sourceBeans, bean -> bean.getKey().equals(sourceKey)).orElseThrow(() -> new FBException("No source bean found for key: " + sourceKey));
 
         return getSpider(sourceBean);
     }
@@ -520,24 +443,14 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
         String customJar = sourceBean.getJar();
         boolean hasCustomJar = StringUtils.isNotBlank(customJar);
 
-        if (
-                hasCustomJar &&
-                !StringUtils.startsWith(customJar, "./") &&
-                !StringUtils.startsWith(customJar, "../") &&
-                !ValidationUtil.isURL(customJar)
-        ) {
+        if (hasCustomJar && !StringUtils.startsWith(customJar, "./") && !StringUtils.startsWith(customJar, "../") && !ValidationUtil.isURL(customJar)) {
             Platform.runLater(() -> ToastHelper.showErrorI18n(I18nKeys.TV_ERROR_LOAD_SPIDER_CONFIG_FAILED));
             log.error("load site custom spider error, spider url invalid");
 
             return Spider.getEmpty();
         }
 
-        return spiderJarLoader.getSpider(
-                sourceBean.getKey(),
-                sourceBean.getApi(),
-                sourceBean.getExt(),
-                hasCustomJar ? customJar : apiConfig.getSpider()
-        );
+        return spiderJarLoader.getSpider(sourceBean.getKey(), sourceBean.getApi(), sourceBean.getExt(), hasCustomJar ? customJar : apiConfig.getSpider());
     }
 
     @Override
