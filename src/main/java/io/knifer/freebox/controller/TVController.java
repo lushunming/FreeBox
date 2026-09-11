@@ -36,10 +36,14 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.value.ChangeListener;
+import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.scene.Node;
 import javafx.scene.control.*;
+import javafx.scene.control.skin.VirtualFlow;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
@@ -116,8 +120,11 @@ public class TVController implements Destroyable {
     private final BooleanProperty movieLoadingProperty = new SimpleBooleanProperty(false);
     private final BooleanProperty searchLoadingProperty = new SimpleBooleanProperty(false);
     private final BooleanProperty classFilterButtonDisableProperty = new SimpleBooleanProperty(true);
+    /**
+     * 标记是否正在自动加载下一页，防止滚动时重复触发
+     */
+    private final BooleanProperty loadingMoreProperty = new SimpleBooleanProperty(false);
     private SpiderTemplate template;
-    private Movie.Video fetchMoreItem;
     private ClientTVProperties clientTVPropertiesBackup;
     private ClientTVProperties clientTVProperties;
 
@@ -130,9 +137,6 @@ public class TVController implements Destroyable {
     @FXML
     private void initialize() {
         template = context.getSpiderTemplate();
-        fetchMoreItem = new Movie.Video();
-        fetchMoreItem.setId(BaseValues.LOAD_MORE_ITEM_ID);
-        fetchMoreItem.setName(I18nHelper.get(I18nKeys.TV_LOAD_MORE));
         context.registerEventListener(
                 AppEvents.ClientUnregisteredEvent.class,
                 evt -> LoadingHelper.hideLoading()
@@ -212,8 +216,11 @@ public class TVController implements Destroyable {
             // 影片列表单元格工厂
             videosGridView.setCellFactory(new VideoGridCellFactory(
                     video -> openVideo(video.getSourceKey(), video.getId(), video.getName()),
-                    this::loadMoreMovie
+                    cell -> {}
             ));
+
+            // 滚动自动加载下一页
+            setupScrollAutoLoadMore();
             // 搜索框获取焦点时，显示热搜
             searchTextField.setOnMouseClicked(evt -> {
                 if (evt.getButton() != MouseButton.PRIMARY) {
@@ -332,28 +339,78 @@ public class TVController implements Destroyable {
     }
 
     /**
-     * 加载更多影片
-     * @param loadMoreCell 视图中的“加载更多”项
+     * 配置视频列表滚动自动加载下一页
+     * 监听 GridView 内部的 VirtualFlow 滚动位置，接近底部时自动加载更多
      */
-    private void loadMoreMovie(VideoGridCellFactory.VideoGridCell loadMoreCell) {
+    private void setupScrollAutoLoadMore() {
+        Runnable bindFlow = () -> {
+            VirtualFlow<?> flow = findVirtualFlow(videosGridView);
+            if (flow == null) {
+                return;
+            }
+            ChangeListener<Number> positionListener = (obs, oldVal, newVal) -> {
+                if (loadingMoreProperty.get() || movieLoadingProperty.get() || searchLoadingProperty.get()) {
+                    return;
+                }
+                // position 取值 0.0（顶部）~1.0（底部），接近底部时触发加载
+                if (newVal.doubleValue() >= 0.95) {
+                    loadMoreMovie();
+                }
+            };
+            flow.positionProperty().addListener(positionListener);
+        };
+        // GridView 的皮肤可能在场景图构建完成后才可用，先尝试一次，再监听皮肤变化
+        videosGridView.skinProperty().addListener((obs, oldSkin, newSkin) -> bindFlow.run());
+        Platform.runLater(bindFlow);
+    }
+
+    /**
+     * 在节点树中查找 VirtualFlow
+     * @param root 查找起点
+     * @return VirtualFlow 实例，未找到返回 null
+     */
+    private VirtualFlow<?> findVirtualFlow(Node root) {
+        if (root instanceof VirtualFlow<?> flow) {
+            return flow;
+        }
+        if (root instanceof javafx.scene.Parent parent) {
+            for (Node child : parent.getChildrenUnmodifiable()) {
+                VirtualFlow<?> found = findVirtualFlow(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 加载更多影片（滚动触发）
+     */
+    private void loadMoreMovie() {
         MovieSort.SortData sortData;
         MutablePair<Movie, List<Movie.Video>> movieAndVideoCached;
         Movie movieCached;
         HashMap<String, String> filterSelectMap;
 
-        loadMoreCell.setDisable(true);
+        if (loadingMoreProperty.get()) {
+            return;
+        }
         sortData = classesListView.getSelectionModel().getSelectedItem();
         if (sortData == null) {
-            loadMoreCell.setDisable(false);
             return;
         }
         movieAndVideoCached = MOVIE_CACHE.get(sortData.getId());
         if (movieAndVideoCached == null) {
-            loadMoreCell.setDisable(false);
             return;
         }
         movieCached = movieAndVideoCached.getLeft();
+        // 当前页已是最后一页或数据已全部加载，不再加载
+        if (movieCached.getPage() >= movieCached.getPagecount()) {
+            return;
+        }
         filterSelectMap = sortData.getFilterSelect();
+        loadingMoreProperty.set(true);
         template.getCategoryContent(
                 GetCategoryContentDTO.of(
                         getSourceBean().getKey(),
@@ -362,29 +419,30 @@ public class TVController implements Destroyable {
                         String.valueOf(movieCached.getPage() + 1),
                         filterSelectMap
                 )
-        ).thenAccept(categoryContent -> {
-            Movie movie = categoryContent.getMovie();
+        ).thenAccept(categoryContent -> Platform.runLater(() -> {
+            Movie movie;
             ObservableList<Movie.Video> items = videosGridView.getItems();
-            List<Movie.Video> videos = movie.getVideoList();
-            int loadMoreItemIdx;
+            List<Movie.Video> videos;
 
-            if (videos.isEmpty()) {
-                return;
-            }
-            loadMoreItemIdx = items.size() - 1;
-            Platform.runLater(() -> {
-                items.addAll(videos);
-                if (movie.getPage() >= movie.getPagecount() || items.size() >= movie.getRecordcount()) {
-                    // 没有更多的项了，移除“获取更多”项
-                    items.remove(loadMoreItemIdx);
-                } else {
-                    // 将“获取更多”项移动到最后
-                    Collections.swap(items, loadMoreItemIdx, items.size() - 1);
+            try {
+                if (categoryContent == null) {
+                    return;
                 }
+                movie = categoryContent.getMovie();
+                if (movie == null || CollectionUtil.isEmpty(movie.getVideoList())) {
+                    return;
+                }
+                videos = movie.getVideoList();
+                items.addAll(videos);
                 movieAndVideoCached.setLeft(movie);
                 movieAndVideoCached.setRight(new ArrayList<>(items));
-                loadMoreCell.setDisable(false);
-            });
+            } finally {
+                loadingMoreProperty.set(false);
+            }
+        })).exceptionally(exception -> {
+            loadingMoreProperty.set(false);
+            log.error("load more movie error", exception);
+            return null;
         });
     }
 
@@ -761,23 +819,12 @@ public class TVController implements Destroyable {
             boolean showLoadMoreItem
     ) {
         ObservableList<Movie.Video> items = videosGridView.getItems();
-        Movie movie = movieAndVideos.getLeft();
         List<Movie.Video> videos = movieAndVideos.getRight();
 
         if (videos.isEmpty()) {
             return;
         }
-        Platform.runLater(() -> {
-            items.addAll(videos);
-            if (    showLoadMoreItem &&
-                    !items.get(items.size() - 1).equals(fetchMoreItem) &&
-                    movie.getPagecount() > movie.getPage() &&
-                    movie.getRecordcount() > items.size()
-            ) {
-                // 添加“获取更多”项
-                items.add(fetchMoreItem);
-            }
-        });
+        Platform.runLater(() -> items.addAll(videos));
     }
 
     /**
