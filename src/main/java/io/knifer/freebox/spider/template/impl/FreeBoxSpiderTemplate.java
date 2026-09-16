@@ -279,7 +279,7 @@ public class FreeBoxSpiderTemplate implements SpiderTemplate {
                         result = movieHistory.getData().values();
                         log.info("getPlayHistory: {}", result);
 
-                        return result.isEmpty() ? List.<VodInfo>of() : new ArrayList<>(result);
+                        return result.isEmpty() ? List.<VodInfo>of() : cn.hutool.core.collection.CollectionUtil.reverse(new ArrayList<>(result));
                     }
                 }, EXECUTOR))
                 .exceptionally(e -> {
