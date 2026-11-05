@@ -2,7 +2,6 @@ package io.knifer.freebox.component.factory;
 
 import io.knifer.freebox.component.node.EmojiableLabel;
 import io.knifer.freebox.constant.BaseResources;
-import io.knifer.freebox.constant.BaseValues;
 import io.knifer.freebox.constant.VideoPlaybackTrigger;
 import io.knifer.freebox.helper.ConfigHelper;
 import io.knifer.freebox.helper.ImageHelper;
@@ -49,8 +48,6 @@ public class VideoGridCellFactory implements Callback<GridView<Movie.Video>, Gri
 
     private final Consumer<Movie.Video> onVideoOpen;
 
-    private final Consumer<VideoGridCell> onLoadMoreMovie;
-
     private final BooleanProperty showSourceName = new SimpleBooleanProperty(false);
 
     private static final Map<String, String> SOURCE_KEY_AND_NAME_MAP = new HashMap<>();
@@ -61,9 +58,8 @@ public class VideoGridCellFactory implements Callback<GridView<Movie.Video>, Gri
 
     private static final double CELL_HEIGHT = 200;
 
-    public VideoGridCellFactory(Consumer<Movie.Video> onVideoOpen, Consumer<VideoGridCell> onLoadMoreMovie) {
+    public VideoGridCellFactory(Consumer<Movie.Video> onVideoOpen) {
         this.onVideoOpen = onVideoOpen;
-        this.onLoadMoreMovie = onLoadMoreMovie;
     }
 
     public void setSourceBeans(Collection<SourceBean> sourceBeans) {
@@ -104,7 +100,7 @@ public class VideoGridCellFactory implements Callback<GridView<Movie.Video>, Gri
 
     @Override
     public GridCell<Movie.Video> call(GridView<Movie.Video> view) {
-        VideoGridCell cell = new VideoGridCell(onVideoOpen, onLoadMoreMovie, showSourceName);
+        VideoGridCell cell = new VideoGridCell(onVideoOpen, showSourceName);
 
         cell.setContentDisplay(ContentDisplay.GRAPHIC_ONLY);
 
@@ -116,7 +112,6 @@ public class VideoGridCellFactory implements Callback<GridView<Movie.Video>, Gri
 
         private EventHandler<MouseEvent> eventFilter = null;
         private final Consumer<Movie.Video> onVideoOpen;
-        private final Consumer<VideoGridCell> onLoadMoreMovie;
         private final BooleanProperty showSourceName;
 
         @Override
@@ -189,22 +184,15 @@ public class VideoGridCellFactory implements Callback<GridView<Movie.Video>, Gri
                 }
                 // 图片
                 moviePicImageView = new ImageView();
-                if (BaseValues.LOAD_MORE_ITEM_ID.equals(itemId)) {
-                    if (getCursor() != Cursor.HAND) {
-                        setCursor(Cursor.HAND);
-                    }
-                    moviePicImageView.setImage(BaseResources.LOAD_MORE_IMG);
-                } else {
-                    moviePicImageView.setImage(BaseResources.PICTURE_PLACEHOLDER_IMG);
-                    if (itemId != null) {
-                        picUrl = item.getPic();
-                        ImageHelper.loadAsync(picUrl)
-                                .thenAccept(result -> {
-                                    if (result.isSuccess()) {
-                                        Platform.runLater(() -> moviePicImageView.setImage(result.getImage()));
-                                    }
-                                });
-                    }
+                moviePicImageView.setImage(BaseResources.PICTURE_PLACEHOLDER_IMG);
+                if (itemId != null) {
+                    picUrl = item.getPic();
+                    ImageHelper.loadAsync(picUrl)
+                            .thenAccept(result -> {
+                                if (result.isSuccess()) {
+                                    Platform.runLater(() -> moviePicImageView.setImage(result.getImage()));
+                                }
+                            });
                 }
                 moviePicImageView.setFitWidth(CELL_WIDTH);
                 moviePicImageView.setFitHeight(CELL_HEIGHT);
@@ -228,11 +216,6 @@ public class VideoGridCellFactory implements Callback<GridView<Movie.Video>, Gri
                 int expectClickCount;
 
                 if (evt.getButton() != MouseButton.PRIMARY) {
-
-                    return;
-                }
-                if (BaseValues.LOAD_MORE_ITEM_ID.equals(itemId)) {
-                    onLoadMoreMovie.accept(this);
 
                     return;
                 }

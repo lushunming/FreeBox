@@ -45,7 +45,6 @@ public class I18nKeys {
     public static final String HOME_VERSION_INFO = "home.version-info";
 
     public static final String TV_HOME = "tv.home";
-    public static final String TV_LOAD_MORE = "tv.load-more";
     public static final String TV_SOURCE_BEAN_BLOCK = "tv.source-bean-block";
     public static final String TV_SOURCE_FILTER_SEARCHING = "tv.source-filter.searching";
     public static final String TV_SOURCE_FILTER_SEARCHING_FINISHED = "tv.source-filter.searching-finished";

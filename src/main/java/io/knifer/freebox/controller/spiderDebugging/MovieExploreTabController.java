@@ -109,7 +109,7 @@ public class MovieExploreTabController extends SpiderDebuggingTabController {
     private void initialize() {
         movieExploreLoadingProperty = new SimpleBooleanProperty(false);
         movieExploreListLoadingProperty = new SimpleBooleanProperty(false);
-        videoGridCellFactory = new VideoGridCellFactory(this::selectExploreMovie, cell -> {});
+        videoGridCellFactory = new VideoGridCellFactory(this::selectExploreMovie);
 
         movieExploreGridView.setCellFactory(videoGridCellFactory);
         movieExploreClassComboBox.setConverter(new StringConverter<>() {

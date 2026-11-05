@@ -36,9 +36,12 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
+import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
+import javafx.geometry.Orientation;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
@@ -68,6 +71,16 @@ import java.util.*;
 @Slf4j
 @RequiredArgsConstructor(onConstructor = @__(@Inject))
 public class TVController implements Destroyable {
+
+    /**
+     * 滚动条 value/max 达到该比例时视为滚动到底部
+     */
+    private static final double VIDEO_GRID_SCROLL_BOTTOM_THRESHOLD = 0.9;
+
+    /**
+     * 内容未铺满时最多连续自动请求的页数，避免异常数据导致无限请求
+     */
+    private static final int MAX_AUTO_FILL_PAGE_COUNT = 10;
 
     @FXML
     private BorderPane contentPane;
@@ -115,11 +128,35 @@ public class TVController implements Destroyable {
     private final BooleanProperty sortsLoadingProperty = new SimpleBooleanProperty(true);
     private final BooleanProperty movieLoadingProperty = new SimpleBooleanProperty(false);
     private final BooleanProperty searchLoadingProperty = new SimpleBooleanProperty(false);
+    private final BooleanProperty loadingMoreVideosProperty = new SimpleBooleanProperty(false);
     private final BooleanProperty classFilterButtonDisableProperty = new SimpleBooleanProperty(true);
     private SpiderTemplate template;
-    private Movie.Video fetchMoreItem;
     private ClientTVProperties clientTVPropertiesBackup;
     private ClientTVProperties clientTVProperties;
+    private ScrollBar videosGridVerticalScrollBar;
+    private int autoFillPageCount;
+
+    private final ChangeListener<Number> videosGridScrollListener = (ob, oldValue, newValue) -> {
+        ScrollBar scrollBar = videosGridVerticalScrollBar;
+        double max;
+
+        if (
+                scrollBar == null ||
+                loadingMoreVideosProperty.get() ||
+                movieLoadingProperty.get() ||
+                searchLoadingProperty.get()
+        ) {
+
+            return;
+        }
+        max = scrollBar.getMax();
+        if (max <= 0 || newValue.doubleValue() / max < VIDEO_GRID_SCROLL_BOTTOM_THRESHOLD) {
+
+            return;
+        }
+        autoFillPageCount = 0;
+        loadMoreVideos(false);
+    };
 
     private final MovieSuggestionHandler movieSuggestionHandler = new IQiYiMovieSuggestionHandler();
     private final MovieBatchSearchingHandler movieBatchSearchingHandler;
@@ -130,9 +167,6 @@ public class TVController implements Destroyable {
     @FXML
     private void initialize() {
         template = context.getSpiderTemplate();
-        fetchMoreItem = new Movie.Video();
-        fetchMoreItem.setId(BaseValues.LOAD_MORE_ITEM_ID);
-        fetchMoreItem.setName(I18nHelper.get(I18nKeys.TV_LOAD_MORE));
         context.registerEventListener(
                 AppEvents.ClientUnregisteredEvent.class,
                 evt -> LoadingHelper.hideLoading()
@@ -211,8 +245,7 @@ public class TVController implements Destroyable {
             );
             // 影片列表单元格工厂
             videosGridView.setCellFactory(new VideoGridCellFactory(
-                    video -> openVideo(video.getSourceKey(), video.getId(), video.getName()),
-                    this::loadMoreMovie
+                    video -> openVideo(video.getSourceKey(), video.getId(), video.getName())
             ));
             // 搜索框获取焦点时，显示热搜
             searchTextField.setOnMouseClicked(evt -> {
@@ -246,7 +279,9 @@ public class TVController implements Destroyable {
                             .or(classFilterButtonDisableProperty)
             );
             sortsLoadingProgressIndicator.visibleProperty().bind(sortsLoadingProperty.or(movieLoadingProperty));
-            movieLoadingProgressIndicator.visibleProperty().bind(movieLoadingProperty);
+            movieLoadingProgressIndicator.visibleProperty().bind(
+                    movieLoadingProperty.or(loadingMoreVideosProperty)
+            );
             videosGridView.disableProperty().bind(movieLoadingProperty);
             classesListView.disableProperty().bind(sortsLoadingProperty.or(movieLoadingProperty));
             sourceBeanComboBox.disableProperty().bind(sortsLoadingProperty);
@@ -332,60 +367,204 @@ public class TVController implements Destroyable {
     }
 
     /**
-     * 加载更多影片
-     * @param loadMoreCell 视图中的“加载更多”项
+     * 安装影片列表纵向滚动条监听（只安装一次）
      */
-    private void loadMoreMovie(VideoGridCellFactory.VideoGridCell loadMoreCell) {
-        MovieSort.SortData sortData;
-        MutablePair<Movie, List<Movie.Video>> movieAndVideoCached;
-        Movie movieCached;
-        HashMap<String, String> filterSelectMap;
+    private void attachVideosGridScrollListener() {
+        ScrollBar scrollBar;
 
-        loadMoreCell.setDisable(true);
+        if (videosGridVerticalScrollBar != null) {
+
+            return;
+        }
+        videosGridView.applyCss();
+        videosGridView.layout();
+        scrollBar = findVideosGridVerticalScrollBar();
+        if (scrollBar == null) {
+            log.debug("videos grid vertical scroll bar not found, wait for next content change");
+
+            return;
+        }
+        videosGridVerticalScrollBar = scrollBar;
+        scrollBar.valueProperty().addListener(videosGridScrollListener);
+        scrollBar.visibleProperty().addListener((ob, oldVal, newVal) -> {
+            if (Boolean.TRUE.equals(newVal)) {
+                // 滚动条出现说明内容已铺满，重置自动补页计数
+                autoFillPageCount = 0;
+            } else {
+                // 布局完成才发现内容不足一页时，继续补页
+                Platform.runLater(this::ensureVideosGridFilled);
+            }
+        });
+    }
+
+    /**
+     * 查找影片列表的纵向滚动条
+     */
+    @Nullable
+    private ScrollBar findVideosGridVerticalScrollBar() {
+        for (Node node : videosGridView.lookupAll(".scroll-bar")) {
+            if (
+                    node instanceof ScrollBar scrollBar &&
+                    scrollBar.getOrientation() == Orientation.VERTICAL
+            ) {
+
+                return scrollBar;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 影片列表内容变化后，安装滚动监听，并在内容未铺满时继续请求下一页
+     */
+    private void onVideosGridContentChanged() {
+        attachVideosGridScrollListener();
+        ensureVideosGridFilled();
+    }
+
+    /**
+     * 当前页没有铺满（未展示纵向滚动条）时，继续请求下一页直到铺满或没有更多数据
+     */
+    private void ensureVideosGridFilled() {
+        MovieSort.SortData sortData;
+        MutablePair<Movie, List<Movie.Video>> movieAndVideosCached;
+        ScrollBar scrollBar;
+
+        if (
+                autoFillPageCount >= MAX_AUTO_FILL_PAGE_COUNT ||
+                movieLoadingProperty.get() ||
+                loadingMoreVideosProperty.get() ||
+                videosGridView.getHeight() <= 0
+        ) {
+
+            return;
+        }
         sortData = classesListView.getSelectionModel().getSelectedItem();
         if (sortData == null) {
-            loadMoreCell.setDisable(false);
+
             return;
         }
-        movieAndVideoCached = MOVIE_CACHE.get(sortData.getId());
-        if (movieAndVideoCached == null) {
-            loadMoreCell.setDisable(false);
+        movieAndVideosCached = MOVIE_CACHE.get(sortData.getId());
+        if (
+                movieAndVideosCached == null ||
+                !hasMoreVideos(movieAndVideosCached.getLeft(), videosGridView.getItems().size())
+        ) {
+
             return;
         }
-        movieCached = movieAndVideoCached.getLeft();
+        attachVideosGridScrollListener();
+        // 强制完成一次布局，确保滚动条可见性已根据最新内容计算
+        videosGridView.applyCss();
+        videosGridView.layout();
+        scrollBar = videosGridVerticalScrollBar;
+        if (scrollBar == null) {
+            // 滚动条尚未就绪，等待下一次内容变化再判断，避免误触发连续请求
+
+            return;
+        }
+        if (scrollBar.isVisible() && scrollBar.getMax() > 0) {
+            // 内容已铺满，滚动条正常展示
+            autoFillPageCount = 0;
+
+            return;
+        }
+        autoFillPageCount++;
+        log.debug("videos grid is not filled, auto load next page, count={}", autoFillPageCount);
+        loadMoreVideos(true);
+    }
+
+    /**
+     * 加载下一页影片
+     * @param autoFill 是否是内容未铺满时的自动补页
+     */
+    private void loadMoreVideos(boolean autoFill) {
+        MovieSort.SortData sortData;
+        MutablePair<Movie, List<Movie.Video>> movieAndVideosCached;
+        Movie movieCached;
+        SourceBean sourceBean;
+        HashMap<String, String> filterSelectMap;
+
+        if (loadingMoreVideosProperty.get()) {
+
+            return;
+        }
+        sortData = classesListView.getSelectionModel().getSelectedItem();
+        if (sortData == null) {
+
+            return;
+        }
+        movieAndVideosCached = MOVIE_CACHE.get(sortData.getId());
+        if (movieAndVideosCached == null) {
+
+            return;
+        }
+        movieCached = movieAndVideosCached.getLeft();
+        if (!hasMoreVideos(movieCached, videosGridView.getItems().size())) {
+
+            return;
+        }
+        sourceBean = getSourceBean();
+        if (sourceBean == null) {
+
+            return;
+        }
         filterSelectMap = sortData.getFilterSelect();
+        if (!autoFill) {
+            autoFillPageCount = 0;
+        }
+        loadingMoreVideosProperty.set(true);
         template.getCategoryContent(
                 GetCategoryContentDTO.of(
-                        getSourceBean().getKey(),
+                        sourceBean.getKey(),
                         sortData.getId(),
                         !filterSelectMap.isEmpty(),
                         String.valueOf(movieCached.getPage() + 1),
                         filterSelectMap
                 )
         ).thenAccept(categoryContent -> {
-            Movie movie = categoryContent.getMovie();
-            ObservableList<Movie.Video> items = videosGridView.getItems();
-            List<Movie.Video> videos = movie.getVideoList();
-            int loadMoreItemIdx;
+            Movie movie;
+            List<Movie.Video> videos;
 
-            if (videos.isEmpty()) {
+            if (
+                    categoryContent == null ||
+                    (movie = categoryContent.getMovie()) == null ||
+                    CollectionUtil.isEmpty(videos = movie.getVideoList())
+            ) {
+                Platform.runLater(() -> loadingMoreVideosProperty.set(false));
+
                 return;
             }
-            loadMoreItemIdx = items.size() - 1;
             Platform.runLater(() -> {
-                items.addAll(videos);
-                if (movie.getPage() >= movie.getPagecount() || items.size() >= movie.getRecordcount()) {
-                    // 没有更多的项了，移除“获取更多”项
-                    items.remove(loadMoreItemIdx);
-                } else {
-                    // 将“获取更多”项移动到最后
-                    Collections.swap(items, loadMoreItemIdx, items.size() - 1);
+                ObservableList<Movie.Video> items = videosGridView.getItems();
+
+                if (MOVIE_CACHE.get(sortData.getId()) != movieAndVideosCached) {
+                    // 分类已切换，丢弃旧请求的结果
+                    loadingMoreVideosProperty.set(false);
+
+                    return;
                 }
-                movieAndVideoCached.setLeft(movie);
-                movieAndVideoCached.setRight(new ArrayList<>(items));
-                loadMoreCell.setDisable(false);
+                items.addAll(videos);
+                movieAndVideosCached.setLeft(movie);
+                movieAndVideosCached.setRight(new ArrayList<>(items));
+                loadingMoreVideosProperty.set(false);
+                Platform.runLater(this::onVideosGridContentChanged);
             });
+        }).exceptionally(exception -> {
+            log.warn("load more videos failed", exception);
+            Platform.runLater(() -> loadingMoreVideosProperty.set(false));
+
+            return null;
         });
+    }
+
+    /**
+     * 是否还有下一页影片
+     * @param movie 影片数据
+     * @param loadedCount 已加载的影片数量
+     */
+    private boolean hasMoreVideos(Movie movie, int loadedCount) {
+        return movie.getPage() < movie.getPagecount() && loadedCount < movie.getRecordcount();
     }
 
     /**
@@ -697,6 +876,7 @@ public class TVController implements Destroyable {
             HashMap<String, String> filterSelectMap;
 
             movieLoadingProperty.set(true);
+            autoFillPageCount = 0;
             if (!items.isEmpty()) {
                 items.clear();
             }
@@ -730,13 +910,13 @@ public class TVController implements Destroyable {
                         return;
                     }
                     movieAndVideos = MutablePair.of(movie, movie.getVideoList());
-                    putVideosInView(movieAndVideos, true);
+                    putVideosInView(movieAndVideos);
                     MOVIE_CACHE.put(sortData.getId(), movieAndVideos);
                     movieLoadingProperty.set(false);
                 });
             } else {
                 // 使用缓存中的影片数据
-                putVideosInView(movieAndVideosCached, true);
+                putVideosInView(movieAndVideosCached);
                 movieLoadingProperty.set(false);
             }
         });
@@ -756,27 +936,18 @@ public class TVController implements Destroyable {
      * 将影片数据放入视图中
      * @param movieAndVideos 影片数据
      */
-    private void putVideosInView(
-            MutablePair<Movie, List<Movie.Video>> movieAndVideos,
-            boolean showLoadMoreItem
-    ) {
+    private void putVideosInView(MutablePair<Movie, List<Movie.Video>> movieAndVideos) {
         ObservableList<Movie.Video> items = videosGridView.getItems();
-        Movie movie = movieAndVideos.getLeft();
         List<Movie.Video> videos = movieAndVideos.getRight();
 
-        if (videos.isEmpty()) {
+        if (CollectionUtil.isEmpty(videos)) {
+
             return;
         }
         Platform.runLater(() -> {
             items.addAll(videos);
-            if (    showLoadMoreItem &&
-                    !items.get(items.size() - 1).equals(fetchMoreItem) &&
-                    movie.getPagecount() > movie.getPage() &&
-                    movie.getRecordcount() > items.size()
-            ) {
-                // 添加“获取更多”项
-                items.add(fetchMoreItem);
-            }
+            // 等待布局完成后判断是否已铺满视图
+            Platform.runLater(this::onVideosGridContentChanged);
         });
     }
 
@@ -850,6 +1021,7 @@ public class TVController implements Destroyable {
     private void clearMovieData(Runnable callback) {
         videosGridView.getItems().clear();
         MOVIE_CACHE.clear();
+        autoFillPageCount = 0;
         resetMovieSearching(callback);
     }
 
@@ -944,8 +1116,7 @@ public class TVController implements Destroyable {
         // 显示搜索结果
         if (sourceFilterSlideSidebar.hasCheckedKey(sourceKey)) {
             putVideosInView(
-                    MutablePair.of(searchContent.getMovie(), searchContent.getMovie().getVideoList()),
-                    false
+                    MutablePair.of(searchContent.getMovie(), searchContent.getMovie().getVideoList())
             );
         }
         // 弹出源筛选侧边栏

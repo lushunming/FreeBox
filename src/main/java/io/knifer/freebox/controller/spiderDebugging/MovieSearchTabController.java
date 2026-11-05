@@ -69,7 +69,7 @@ public class MovieSearchTabController extends SpiderDebuggingTabController {
     @FXML
     private void initialize() {
         movieSearchLoadingProperty = new SimpleBooleanProperty(false);
-        videoGridCellFactory = new VideoGridCellFactory(this::selectSearchMovie, cell -> {});
+        videoGridCellFactory = new VideoGridCellFactory(this::selectSearchMovie);
         movieSearchGridView.setCellFactory(videoGridCellFactory);
         context.registerEventListener(
                 AppEvents.SpiderDebuggingViewInitialized.class,

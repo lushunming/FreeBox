@@ -2,7 +2,6 @@ package io.knifer.freebox.component.factory;
 
 import io.knifer.freebox.component.node.EmojiableLabel;
 import io.knifer.freebox.constant.BaseResources;
-import io.knifer.freebox.constant.BaseValues;
 import io.knifer.freebox.constant.I18nKeys;
 import io.knifer.freebox.constant.VideoPlaybackTrigger;
 import io.knifer.freebox.helper.ConfigHelper;
@@ -121,19 +120,15 @@ public class VodInfoGridCellFactory implements Callback<GridView<VodInfo>, GridC
                 tagContainer = new AnchorPane(sourceNameLabel, movieRemarkLabel);
                 // 图片
                 moviePicImageView = new ImageView();
-                if (BaseValues.LOAD_MORE_ITEM_ID.equals(itemId)) {
-                    moviePicImageView.setImage(BaseResources.LOAD_MORE_IMG);
-                } else {
-                    moviePicImageView.setImage(BaseResources.PICTURE_PLACEHOLDER_IMG);
-                    if (itemId != null) {
-                        picUrl = item.getPic();
-                        ImageHelper.loadAsync(picUrl)
-                                .thenAccept(result -> {
-                                    if (result.isSuccess()) {
-                                        Platform.runLater(() -> moviePicImageView.setImage(result.getImage()));
-                                    }
-                                });
-                    }
+                moviePicImageView.setImage(BaseResources.PICTURE_PLACEHOLDER_IMG);
+                if (itemId != null) {
+                    picUrl = item.getPic();
+                    ImageHelper.loadAsync(picUrl)
+                            .thenAccept(result -> {
+                                if (result.isSuccess()) {
+                                    Platform.runLater(() -> moviePicImageView.setImage(result.getImage()));
+                                }
+                            });
                 }
                 moviePicImageView.setFitWidth(CELL_WIDTH);
                 moviePicImageView.setFitHeight(CELL_HEIGHT);

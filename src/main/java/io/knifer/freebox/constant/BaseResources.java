@@ -26,7 +26,6 @@ public class BaseResources {
 
     public static final Image LOGO_IMG = loadImage("image/logo.png");
     public static final Image PICTURE_PLACEHOLDER_IMG = loadImage("image/picture_placeholder.png");
-    public static final Image LOAD_MORE_IMG = loadImage("image/load_more.png");
     public static final Image PLAYING_GIF = loadImage("image/playing.gif");
     public static final Image PLAY_BUTTON_IMG = loadImage("image/play_button.png");
     public static final Image JAVASCRIPT_LOGO_IMG = loadImage("image/javascript_logo.png");

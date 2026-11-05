@@ -41,10 +41,6 @@ public class BaseValues {
      * KebSocket通信超时时间
      */
     public static final Long KEB_SOCKET_REQUEST_TIMEOUT = 12L;
-    /**
-     * “获取更多”项ID
-     */
-    public static final String LOAD_MORE_ITEM_ID = "load-more";
 
     /**
      * x.properties key
